@@ -74,6 +74,33 @@
 
 设置与窗口位置保存在 `%APPDATA%\WageClock\settings.json`。
 
+## 安装包
+
+`WageClockSetup.exe` 是一个向导式安装程序：选目录、查依赖、装完即可用，卸载走「设置 → 应用」。
+
+| 步骤 | 内容 |
+| --- | --- |
+| 欢迎 | 版本号与功能简介，说明为当前用户安装、不需要管理员权限 |
+| 安装位置 | 默认 `%LOCALAPPDATA%\Programs\WageClock`，可浏览选择；实时提示目录是否存在、可否写入 |
+| 环境检查 | WebView2 运行时、.NET Framework 4.8、目标目录可写；缺 WebView2 时可以一键静默安装（安装包内置微软引导程序，离线也能装） |
+| 附加任务 | 桌面快捷方式 / 开始菜单 / 开机自启 / 装完启动 |
+| 完成 | 显示程序位置与常用操作，可立即启动 |
+
+![选择安装位置](shots/installer-2-dir.png)
+
+![检查运行环境](shots/installer-3-check.png)
+
+卸载默认**保留**个人设置（月薪、班次、窗口位置），要连设置一起清掉就用 `/purge`。
+安装包不弹 UAC：它只写当前用户的目录与 `HKCU`，装到 `Program Files` 这类受保护位置会提示换成可写目录。
+
+命令行（批量部署或自动化测试用）：
+
+```powershell
+WageClockSetup.exe /silent /dir=D:\Apps\WageClock /nostart     # 静默安装
+uninstall.exe /uninstall /silent                               # 静默卸载，保留设置
+uninstall.exe /uninstall /silent /purge                        # 连设置一起删
+```
+
 ## 项目结构
 
 ```
@@ -91,8 +118,12 @@ host/
   Shot.cs               固定时刻截图工具（回归用）
   AssemblyInfo.cs       程序集信息
   app.manifest          DPI 感知声明
+installer/
+  Setup.cs              安装程序：向导、依赖检测、安装与卸载
+  AssemblyInfo.cs       安装程序版本信息
 tools/
   build.ps1             用 csc 编译宿主
+  build-installer.ps1   打包程序文件并编译安装程序
   make-icon.ps1         生成多尺寸应用图标
   make-sheet.ps1        把各状态截图拼成总览图
   wv2/                  WebView2 SDK 程序集（构建依赖）
@@ -107,7 +138,10 @@ design/                 第一轮需求线框
 
 ```powershell
 .\tools\build.ps1                 # 输出 build\WageClock.exe
+.\tools\build-installer.ps1       # 输出 build\WageClockSetup.exe（先自动编译主程序）
 ```
+
+`build-installer.ps1` 会把 `build\` 里的程序和 `src`、`assets` 打成 `payload.zip` 嵌进安装程序，首次运行时会下载一次 WebView2 引导程序缓存在 `build\cache\`（约 1.8 MB）。
 
 **测试**：
 
