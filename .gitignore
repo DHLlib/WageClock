@@ -14,3 +14,6 @@ data/
 *.user
 Thumbs.db
 desktop.ini
+
+# 由 WageClock.exe --shot 生成的各状态截图（总览图 sheet.png 仍入库）
+shots/[0-9][0-9]-*.png

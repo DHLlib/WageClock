@@ -19,6 +19,25 @@ function Draw-Rounded($g, $img, [int]$x, [int]$y, [int]$w, [int]$h, [int]$r) {
 $shots = Join-Path $root 'shots'
 $out = Join-Path $root 'shots\sheet.png'
 
+# 各状态截图不入库：缺了就用宿主自带的截图模式重新生成（要求没有正在运行的实例）
+$needed = @(
+    '01-working-dark.png', '02-lunch-dark.png', '03-before-dark.png', '04-done-dark.png', '05-off-dark.png',
+    '06-working-light.png', '07-lunch-light.png', '08-off-light.png',
+    '09-settings-dark.png', '10-settings-light.png', '11-big-salary.png'
+)
+$missing = @($needed | Where-Object { -not (Test-Path (Join-Path $shots $_)) })
+if ($missing.Count -gt 0) {
+    $exe = Join-Path $root 'build\WageClock.exe'
+    if (-not (Test-Path $exe)) { throw "缺少状态截图，且没有 build\WageClock.exe；先运行 tools\build.ps1" }
+    if (Get-Process WageClock -ErrorAction SilentlyContinue) {
+        throw "缺少状态截图，但 WageClock 正在运行；先退出托盘实例再重跑本脚本"
+    }
+    Write-Output ("生成缺失的状态截图（" + $missing.Count + " 张）…")
+    & $exe --shot $shots | Out-Null
+    $still = @($needed | Where-Object { -not (Test-Path (Join-Path $shots $_)) })
+    if ($still.Count -gt 0) { throw ("截图失败，仍缺：" + ($still -join ', ')) }
+}
+
 $W = 1432
 $H = 1176
 
