@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
   morning: { start: '09:00', end: '12:00' },
   afternoon: { start: '13:30', end: '18:00' },
   workdays: [1, 2, 3, 4, 5], // 0=Sunday … 6=Saturday
-  useHolidays: true,
+  
   overrides: {}, // 'YYYY-MM-DD' -> 'off' | 'on'
   theme: 'auto',
   closeAction: 'auto',
@@ -55,7 +55,7 @@ function formatCountdown(seconds) {
 }
 
 /** Seconds until the week's last shift ends (Friday 18:00 for a Mon-Fri week). */
-function weekendCountdown(now, settings, holidayData) {
+function weekendCountdown(now, settings) {
   const dayKey = dateKey(now);
   if (_weekendMemo.settings === settings && _weekendMemo.dayKey === dayKey) {
     return _weekendMemo.result;
@@ -65,7 +65,7 @@ function weekendCountdown(now, settings, holidayData) {
   let last = null;
   for (let i = 6; i >= 0; i--) {
     const d = addDays(monday, i);
-    if (isWorkday(d, settings, holidayData)) { last = d; break; }
+    if (isWorkday(d, settings)) { last = d; break; }
   }
   if (!last) return { reached: true, seconds: 0 };
   const end = parseHM(settings.afternoon && settings.afternoon.end) || parseHM(settings.morning && settings.morning.end) || 0;
@@ -144,24 +144,11 @@ function segments(settings) {
   return out;
 }
 
-function holidayTable(data, year) {
-  const t = (data && data[year]) || {};
-  return {
-    holidays: new Set(t.holidays || []),
-    workdays: new Set(t.workdays || []),
-  };
-}
-
-/** Is this calendar day a working day for the user? */
-function isWorkday(d, settings, holidayData) {
+/** Is this calendar day a working day? 法定假不带薪口径，只按星期与手动覆盖。 */
+function isWorkday(d, settings) {
   const key = dateKey(d);
   if (settings.overrides && settings.overrides[key]) {
     return settings.overrides[key] === 'on';
-  }
-  if (settings.useHolidays) {
-    const t = holidayTable(holidayData, d.getFullYear());
-    if (t.workdays.has(key)) return true;
-    if (t.holidays.has(key)) return false;
   }
   return (settings.workdays || []).includes(d.getDay());
 }
@@ -170,11 +157,11 @@ function monthDays(year, month /* 0-based */) {
   return new Date(year, month + 1, 0).getDate();
 }
 
-function countWorkdays(year, month, settings, holidayData) {
+function countWorkdays(year, month, settings) {
   const n = monthDays(year, month);
   let c = 0;
   for (let day = 1; day <= n; day++) {
-    if (isWorkday(new Date(year, month, day), settings, holidayData)) c++;
+    if (isWorkday(new Date(year, month, day), settings)) c++;
   }
   return c;
 }
@@ -184,12 +171,12 @@ function countWorkdays(year, month, settings, holidayData) {
 let _rateMemo = { settings: null, monthKey: '', result: null };
 let _weekendMemo = { settings: null, dayKey: '', result: null };
 
-function hourlyRate(settings, holidayData, when) {
+function hourlyRate(settings, when) {
   const d = when || new Date();
   const monthKey = d.getFullYear() + '-' + d.getMonth();
   if (_rateMemo.settings === settings && _rateMemo.monthKey === monthKey) return _rateMemo.result;
 
-  const n = countWorkdays(d.getFullYear(), d.getMonth(), settings, holidayData);
+  const n = countWorkdays(d.getFullYear(), d.getMonth(), settings);
   const hours = totalWorkSeconds(settings) / 3600;
   let result;
   if (n <= 0 || hours <= 0) {
@@ -205,10 +192,10 @@ function hourlyRate(settings, holidayData, when) {
 const WEEKDAY_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
 /** Next working day whose morning start is after `from` (strictly next day when today is already done). */
-function nextWorkdayStart(from, settings, holidayData) {
+function nextWorkdayStart(from, settings) {
   for (let i = 0; i <= 400; i++) {
     const d = addDays(from, i);
-    if (!isWorkday(d, settings, holidayData)) continue;
+    if (!isWorkday(d, settings)) continue;
     const start = parseHM(settings.morning.start);
     if (start == null) continue;
     const at = new Date(d);
@@ -230,11 +217,11 @@ function nextWorkdayStart(from, settings, holidayData) {
  *   segmentList:{kind:string,ratio:number}[], nowRatio:number
  * }}
  */
-function evaluate(now, settings, holidayData) {
+function evaluate(now, settings) {
   const s = Object.assign({}, DEFAULT_SETTINGS, settings || {});
   const total = totalWorkSeconds(s);
-  const rates = hourlyRate(s, holidayData, now);
-  const workday = isWorkday(now, s, holidayData);
+  const rates = hourlyRate(s, now);
+  const workday = isWorkday(now, s);
   const nowSec = secondsOfDay(now) + now.getMilliseconds() / 1000;
   const segs = segments(s);
 
@@ -255,14 +242,14 @@ function evaluate(now, settings, holidayData) {
   const elapsed = (() => {
     let c = 0;
     for (let day = 1; day < now.getDate(); day++) {
-      if (isWorkday(new Date(now.getFullYear(), now.getMonth(), day), s, holidayData)) c++;
+      if (isWorkday(new Date(now.getFullYear(), now.getMonth(), day), s)) c++;
     }
     if (workday && nowSec >= (parseHM(s.morning.start) || 0)) c++;
     return c;
   })();
 
   if (!workday || segs.length === 0) {
-    const next = workday ? null : nextWorkdayStart(addDays(now, 1), s, holidayData);
+    const next = workday ? null : nextWorkdayStart(addDays(now, 1), s);
     const gap = next ? Math.max(0, (next.getTime() - now.getTime()) / 1000) : 0;
     return Object.assign(base, {
       state: 'off',
@@ -280,8 +267,8 @@ function evaluate(now, settings, holidayData) {
       secondaryValue: next ? formatSpan(gap) : '—',
       segmentList: [],
       offWorkSeconds: null,
-      weekendReached: weekendCountdown(now, s, holidayData).reached,
-      weekendSeconds: weekendCountdown(now, s, holidayData).seconds,
+      weekendReached: weekendCountdown(now, s).reached,
+      weekendSeconds: weekendCountdown(now, s).seconds,
     });
   }
 
@@ -325,7 +312,7 @@ function evaluate(now, settings, holidayData) {
   const stateLabel = { before: '待开工', working: '工作中', lunch: '午休', done: '已下班' }[state];
   const endOfDay = a ? a.end : m.end;
   const secToOffWork = Math.max(0, endOfDay - nowSec);
-  const weekend = weekendCountdown(now, s, holidayData);
+  const weekend = weekendCountdown(now, s);
 
   const view = Object.assign(base, {
     state,
@@ -345,7 +332,7 @@ function evaluate(now, settings, holidayData) {
   });
 
   if (state === 'done') {
-    const after = nextWorkdayStart(addDays(now, 1), s, holidayData);
+    const after = nextWorkdayStart(addDays(now, 1), s);
     const gap = after ? Math.max(0, (after.getTime() - now.getTime()) / 1000) : 0;
     view.primaryLabel = '下次上班';
     view.primaryValue = after
