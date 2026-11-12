@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -720,7 +720,19 @@ namespace WageClock
                 _tray.Icon = SystemIcons.Application;
             }
             _tray.Text = "Wage Clock · 工资时钟";
-            _tray.Click += delegate { ToggleWidget(); };
+            // NotifyIcon.Click 对左右键都会触发，右键必须留给菜单
+            _tray.MouseClick += delegate(object sender, MouseEventArgs e)
+            {
+                if (e.Button == MouseButtons.Left)
+                {
+                    Paths.Log("tray left click -> toggle widget");
+                    ToggleWidget();
+                }
+                else
+                {
+                    Paths.Log("tray " + e.Button + " click -> menu");
+                }
+            };
             RebuildTray();
             ScheduleTrayPromotion();
 
@@ -772,6 +784,8 @@ namespace WageClock
 
             _menu.Items.Add(new ToolStripSeparator());
             _menu.Items.Add("退出", null, delegate { Quit(); });
+
+            _menu.Opening += delegate { Paths.Log("tray menu opening"); };
 
             if (_tray != null) _tray.ContextMenuStrip = _menu;
         }
