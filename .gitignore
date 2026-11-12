@@ -1,0 +1,16 @@
+﻿# 构建产物
+build/
+dist/
+
+# 运行时数据与日志
+.tmp/
+data/
+*.log
+*.DMP
+
+# 编辑器 / 系统
+.vs/
+.vscode/
+*.user
+Thumbs.db
+desktop.ini
