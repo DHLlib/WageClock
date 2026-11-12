@@ -128,11 +128,11 @@ $sy = 150
 $sImg = [System.Drawing.Image]::FromFile((Join-Path $shots '09-settings-dark.png'))
 Draw-Rounded $g $sImg $sx $sy 440 760 8
 $sImg.Dispose()
-$g.DrawString('设置 · 月薪 / 两段班次 / 工作日 / 节假日 / 外观', $fCap, $dim, ($sx + 2), ($sy + 760 + 7))
+$g.DrawString('设置 · 月薪 / 两段班次 / 工作日 / 外观', $fCap, $dim, ($sx + 2), ($sy + 760 + 7))
 
 # bottom notes
 $ny = $y0 + 3 * ($ch + $gap + 26) + 4
-$g.DrawString('口径：日薪 = 月薪 ÷ 当月应出勤工作日（含 2026 法定节假日与调休补班），今日已赚按时段线性累计。', $fNote, $gray, 58, $ny)
+$g.DrawString('口径：日薪 = 月薪 ÷ 当月应出勤工作日（只按星期，法定节假日带薪不参与换算），今日已赚按时段线性累计。', $fNote, $gray, 58, $ny)
 $g.DrawString('金额按「已工作秒数 / 应工作秒数」线性累计，向下取整到分；午休、休息日、下班后不再增长。', $fNote, $gray, 58, ($ny + 24))
 
 $g.Dispose()
