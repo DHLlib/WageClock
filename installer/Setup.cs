@@ -766,7 +766,7 @@ namespace WageClockSetup
             body.ForeColor = Ink;
             body.Text = "安装程序会把程序文件放到你选择的目录，并创建开始菜单和桌面快捷方式。\n\n" +
                         "· 实时显示今天已经赚了多少，按秒滚动\n" +
-                        "· 两段班次、法定节假日与调休补班\n" +
+                        "· 两段班次、托盘常驻、可选开机自启\n" +
                         "· 托盘常驻，可选开机自启";
             _body.Controls.Add(body);
 

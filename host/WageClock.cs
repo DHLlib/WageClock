@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -926,7 +926,6 @@ namespace WageClock
                     var init = new Dictionary<string, object>();
                     init["settings"] = App.Config.Data;
                     init["pinned"] = App.AlwaysOnTop;
-                    init["holidayInfo"] = HolidayInfo.Build(DateTime.Now.Year);
                     init["autoLaunchError"] = App.AutoLaunchError;
                     init["trayAvailable"] = App.TrayAvailable;
                     init["integrityLevel"] = Native.IntegrityLevel;
@@ -1284,38 +1283,6 @@ namespace WageClock
                 return;
             }
             base.OnFormClosing(e);
-        }
-    }
-
-    internal static class HolidayInfo
-    {
-        public static Dictionary<string, object> Build(int year)
-        {
-            var info = new Dictionary<string, object>();
-            info["current"] = year;
-            info["covered"] = false;
-            info["holidays"] = 0;
-            info["workdays"] = 0;
-            try
-            {
-                string path = Path.Combine(Paths.SrcDir, "lib", "holidays.json");
-                var all = Store.Json.Deserialize<Dictionary<string, object>>(File.ReadAllText(path));
-                object table;
-                if (all != null && all.TryGetValue(year.ToString(), out table))
-                {
-                    var t = table as Dictionary<string, object>;
-                    if (t != null)
-                    {
-                        info["covered"] = true;
-                        IList h = t["holidays"] as IList;
-                        IList w = t["workdays"] as IList;
-                        info["holidays"] = h != null ? h.Count : 0;
-                        info["workdays"] = w != null ? w.Count : 0;
-                    }
-                }
-            }
-            catch (Exception) { }
-            return info;
         }
     }
 }
