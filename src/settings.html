@@ -1,0 +1,120 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>设置 · Wage Clock</title>
+<link rel="stylesheet" href="styles/settings.css">
+  <script>if (window.chrome && window.chrome.webview) document.documentElement.classList.add("native");</script>
+</head>
+<body class="dark">
+  <div class="win">
+    <header class="tb">
+      <span class="ttl">设置</span>
+      <button class="ico" id="close" aria-label="关闭">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      </button>
+    </header>
+
+    <main class="body">
+      <section>
+        <h2>薪资</h2>
+        <div class="field">
+          <span class="lab">月薪</span>
+          <span class="with-prefix"><i>¥</i><input id="salary" type="number" min="0" step="100" inputmode="decimal"></span>
+          <span class="tip">按实际到手填写</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>上下班时间</h2>
+        <div class="field">
+          <span class="lab">上午</span>
+          <input id="amStart" type="time" step="300">
+          <span class="dash">–</span>
+          <input id="amEnd" type="time" step="300">
+          <span class="dur" id="amDur">3.0 h</span>
+        </div>
+        <div class="field">
+          <span class="lab">下午</span>
+          <input id="pmStart" type="time" step="300">
+          <span class="dash">–</span>
+          <input id="pmEnd" type="time" step="300">
+          <span class="dur" id="pmDur">4.5 h</span>
+        </div>
+        <div class="field total">
+          <span class="lab">合计</span>
+          <b id="totalDur">7.5</b><span class="tip" style="margin-left:2px">小时 / 天，午休不计薪</span>
+        </div>
+        <p class="err" id="err"></p>
+      </section>
+
+      <section>
+        <h2>工作日</h2>
+        <div class="days" id="days">
+          <button data-day="1">一</button>
+          <button data-day="2">二</button>
+          <button data-day="3">三</button>
+          <button data-day="4">四</button>
+          <button data-day="5">五</button>
+          <button data-day="6">六</button>
+          <button data-day="0">日</button>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="useHolidays">
+          <i></i>
+          <span>跟随法定节假日与调休补班</span>
+        </label>
+        <p class="note" id="holidayNote"></p>
+      </section>
+
+      <section>
+        <h2>外观与启动</h2>
+        <div class="field">
+          <span class="lab">主题</span>
+          <div class="seg" id="theme">
+            <button data-theme="auto">跟随系统</button>
+            <button data-theme="dark">深色</button>
+            <button data-theme="light">浅色</button>
+          </div>
+        </div>
+        <div class="field">
+          <span class="lab">关闭</span>
+          <div class="seg" id="closeAction">
+            <button data-close="auto">跟随自启</button>
+            <button data-close="tray">收进托盘</button>
+            <button data-close="quit">退出程序</button>
+          </div>
+        </div>
+        <p class="note" id="closeHint"></p>
+        <label class="switch">
+          <input type="checkbox" id="alwaysOnTop">
+          <i></i>
+          <span>窗口置顶</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="autoLaunch">
+          <i></i>
+          <span>开机自动启动（托盘常驻，× 只收起来不退出）</span>
+        </label>
+        <p class="note warn" id="autoLaunchNote" style="display:none"></p>
+        <p class="note warn" id="trayNote" style="display:none"></p>
+      </section>
+
+      <section class="preview">
+        <div class="pv"><span>本月工作日</span><b id="pvDays">—</b></div>
+        <div class="pv"><span>日薪</span><b id="pvDaily">—</b></div>
+        <div class="pv"><span>时薪</span><b id="pvHourly">—</b></div>
+      </section>
+    </main>
+
+    <footer class="ft">
+      <span class="ft-note">设置立即生效</span>
+      <button class="btn" id="cancel">取消</button>
+      <button class="btn primary" id="save">保存</button>
+    </footer>
+  </div>
+  <script src="lib/schedule.js"></script>
+  <script src="scripts/bridge.js"></script>
+  <script src="scripts/settings.js"></script>
+</body>
+</html>
