@@ -88,7 +88,7 @@ $accent = Brush '#55E3A6'
 $g.DrawString('Wage Clock · 工资时钟', $fTitle, $white, 56, 44)
 $g.DrawString('常驻桌面的「今天已经赚了多少」——时间驱动，每秒重算，午休与休息日自动冻结。', $fSub, $gray, 58, 88)
 
-$tagText = 'v0.1 · WinForms + WebView2 · 实机截图'
+$tagText = 'v1.0 · WinForms + WebView2 · 实机截图'
 $tagSize = $g.MeasureString($tagText, $fTag)
 $tagRect = New-Object System.Drawing.RectangleF(($W - 56 - $tagSize.Width - 24), 52, ($tagSize.Width + 24), 26)
 $tagPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(90, 85, 227, 166), 1)

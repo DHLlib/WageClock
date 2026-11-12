@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 
 [assembly: AssemblyTitle("工资时钟")]
 [assembly: AssemblyDescription("常驻桌面的实时工资计数器")]

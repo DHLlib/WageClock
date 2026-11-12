@@ -41,7 +41,7 @@ namespace WageClockSetup
     static class AppInfo
     {
         public const string Name = "工资时钟";
-        public const string Version = "0.1.0";
+        public const string Version = "1.0.0";
         public const string Publisher = "DHLlib";
         public const string ExeName = "WageClock.exe";
         public const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\WageClock";
@@ -607,7 +607,6 @@ namespace WageClockSetup
         Button _fixWebView;
 
         bool _installing;
-        bool _installed;
 
         public SetupForm(string dir)
         {
@@ -1057,7 +1056,6 @@ namespace WageClockSetup
                         Go(PageTasks);
                         return;
                     }
-                    _installed = true;
                     Go(PageDone);
                     if (opt.Launch)
                     {
