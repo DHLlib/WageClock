@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 /* Bridge between the renderer and the WinForms + WebView2 host.
 
@@ -10,7 +10,6 @@
   const wv = window.chrome && window.chrome.webview ? window.chrome.webview : null;
   const S = window.WageSchedule;
   const LS_KEY = 'wage-clock.settings.v1';
-  const HOLIDAYS_URL = '/lib/holidays.json';
 
   // surface renderer errors in the host log: WebView2 has no console here
   window.addEventListener('error', (ev) => {
@@ -20,23 +19,11 @@
     if (wv) wv.postMessage({ action: 'js-error', payload: { message: 'unhandled rejection: ' + String(ev.reason) } });
   });
 
-  let holidays = {};
-  let holidaysReady = null;
   let seq = 0;
   const pending = new Map();
   const handlers = { tick: [], settings: [], pinned: [] };
 
-  /* ---------------- holidays ---------------- */
 
-  function loadHolidays() {
-    if (!holidaysReady) {
-      holidaysReady = fetch(HOLIDAYS_URL)
-        .then((r) => (r.ok ? r.json() : {}))
-        .catch(() => ({}))
-        .then((data) => { holidays = data; return data; });
-    }
-    return holidaysReady;
-  }
 
   /* ---------------- local storage ---------------- */
 
@@ -93,13 +80,11 @@
 
   window.api = {
     async init() {
-      await loadHolidays();
       const fromHost = await rpc('init');
       const settings = Object.assign({}, S.DEFAULT_SETTINGS, fromHost.settings || {});
       return {
         settings,
         pinned: fromHost.pinned !== false,
-        holidayInfo: fromHost.holidayInfo || { current: new Date().getFullYear(), covered: false, holidays: 0, workdays: 0 },
         autoLaunchError: fromHost.autoLaunchError || null,
         trayAvailable: fromHost.trayAvailable !== false,
       };
@@ -112,9 +97,8 @@
 
     /* Preview is always local: no reason to round-trip for arithmetic. */
     async preview(patch) {
-      await loadHolidays();
       const merged = Object.assign({}, S.DEFAULT_SETTINGS, patch || {});
-      const rates = S.hourlyRate(merged, holidays, new Date());
+      const rates = S.hourlyRate(merged, new Date());
       return {
         workdays: rates.workdays,
         daily: rates.daily,
@@ -125,7 +109,7 @@
     },
 
     evaluate(now, settings) {
-      return S.evaluate(now || new Date(), settings, holidays);
+      return S.evaluate(now || new Date(), settings);
     },
 
     setTheme(theme) { if (wv) wv.postMessage({ action: 'set-theme', payload: { theme } }); },

@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 /* Wage Clock · settings renderer */
 
@@ -6,7 +6,6 @@ const $ = (id) => document.getElementById(id);
 const media = window.matchMedia('(prefers-color-scheme: light)');
 
 let themeMode = 'auto';
-let holidayInfo = null;
 let autoLaunchError = null;
 let closeAction = 'auto';
 let trayAvailable = true;
@@ -58,7 +57,6 @@ function collect() {
     morning: { start: $('amStart').value, end: $('amEnd').value },
     afternoon: { start: $('pmStart').value, end: $('pmEnd').value },
     workdays: preferredDays.slice().sort(),
-    useHolidays: $('useHolidays').checked,
     theme: themeMode,
     closeAction,
     alwaysOnTop: $('alwaysOnTop').checked,
@@ -142,7 +140,6 @@ function hydrate(settings) {
   $('pmEnd').value = settings.afternoon.end;
   preferredDays = settings.workdays.slice();
   paintDays();
-  $('useHolidays').checked = !!settings.useHolidays;
   $('alwaysOnTop').checked = !!settings.alwaysOnTop;
   $('autoLaunch').checked = !!settings.autoLaunch;
   themeMode = settings.theme || 'auto';
@@ -194,17 +191,6 @@ function paintAutoLaunchError() {
   }
 }
 
-function paintHolidayNote() {
-  const el = $('holidayNote');
-  if (!holidayInfo) return;
-  if (holidayInfo.covered) {
-    el.classList.remove('warn');
-    el.textContent = `内置 ${holidayInfo.current} 年国务院放假安排：${holidayInfo.holidays} 天放假、${holidayInfo.workdays} 天补班。每年更新一次即可。`;
-  } else {
-    el.classList.add('warn');
-    el.textContent = `内置数据未覆盖 ${holidayInfo.current} 年，将只按星期判断工作日。请在国务院公布安排后更新 src/lib/holidays.json。`;
-  }
-}
 
 /* ------------------------------------------------------------------ */
 /* wire-up                                                             */
@@ -234,7 +220,7 @@ document.querySelectorAll('#theme button').forEach((b) => {
   });
 });
 
-['useHolidays', 'alwaysOnTop', 'autoLaunch'].forEach((id) => {
+['alwaysOnTop', 'autoLaunch'].forEach((id) => {
   $(id).addEventListener('change', schedulePreview);
 });
 
@@ -289,13 +275,11 @@ window.api.onSettings(({ settings: fresh, autoLaunchError: err }) => {
   schedulePreview();
 });
 
-window.api.init().then(({ settings, holidayInfo: info, autoLaunchError: err, trayAvailable: trayOk }) => {
-  holidayInfo = info;
+window.api.init().then(({ settings, autoLaunchError: err, trayAvailable: trayOk }) => {
   autoLaunchError = err || null;
   trayAvailable = trayOk !== false;
   paintTrayNote();
   hydrate(settings);
-  paintHolidayNote();
   paintAutoLaunchError();
   window.api.ready();
 });
