@@ -273,3 +273,25 @@ input[type="time"]::-webkit-calendar-picker-indicator { opacity: .35; cursor: po
 .btn.primary { background: var(--accent); border-color: transparent; color: #06231A; font-weight: 600; }
 .btn.primary:hover { filter: brightness(1.06); }
 .btn.primary:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+
+/* 不透明度滑块 */
+.slider-row { gap: 10px; }
+.lab.wide { width: 34px; }
+input[type="range"] {
+  -webkit-appearance: none;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--field);
+  cursor: pointer;
+}
+.pv-val { width: 42px; text-align: right; font-variant-numeric: tabular-nums; color: var(--txt); }

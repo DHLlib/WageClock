@@ -21,7 +21,7 @@
 
   let seq = 0;
   const pending = new Map();
-  const handlers = { tick: [], settings: [], pinned: [] };
+  const handlers = { tick: [], settings: [], pinned: [], backdrop: [] };
 
 
 
@@ -113,6 +113,7 @@
     },
 
     setTheme(theme) { if (wv) wv.postMessage({ action: 'set-theme', payload: { theme } }); },
+    setOpacity(value) { if (wv) wv.postMessage({ action: 'set-opacity', payload: { opacity: value } }); },
     cancelled() { if (wv) wv.postMessage({ action: 'cancelled' }); },
     closeWidget() { if (wv) wv.postMessage({ action: 'close-widget' }); },
     openSettings() { if (wv) wv.postMessage({ action: 'open-settings' }); },
@@ -126,5 +127,6 @@
     onTick(cb) { handlers.tick.push(cb); },
     onSettings(cb) { handlers.settings.push(cb); },
     onPinned(cb) { handlers.pinned.push(cb); },
+    onBackdrop(cb) { handlers.backdrop.push(cb); },
   };
 }());

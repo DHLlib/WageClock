@@ -1,4 +1,4 @@
-﻿/* ===========================================================
+/* ===========================================================
    Wage Clock · desktop widget
    Window 400×272 transparent · card 384×256 inside 8px padding
    =========================================================== */
@@ -80,9 +80,12 @@ body.light {
   padding: 15px 20px 13px;
   border-radius: 18px;
   border: 1px solid var(--line);
+  /* --card-alpha 由设置里的「背景不透明度」决定，1 = 不透明；只影响这层底色，文字始终不透明 */
   background:
     radial-gradient(115% 80% at 14% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
-    linear-gradient(162deg, var(--bg-2), var(--bg-1));
+    linear-gradient(162deg,
+      color-mix(in srgb, var(--bg-2) calc(var(--card-alpha, 1) * 100%), transparent),
+      color-mix(in srgb, var(--bg-1) calc(var(--card-alpha, 1) * 100%), transparent));
   box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, .05);
   display: flex;
   flex-direction: column;
@@ -460,4 +463,14 @@ html.native .card::before { border-radius: 0; }
 @media (prefers-reduced-motion: reduce) {
   .ember { animation: none; }
   .sparkler { display: none; }
+}
+/* 半透明背景：先把宿主拍的桌面快照铺底，再叠一层半透明底色，文字仍在上层且不透明 */
+.card.glass {
+  background:
+    radial-gradient(115% 80% at 14% -10%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%),
+    linear-gradient(162deg,
+      color-mix(in srgb, var(--bg-2) calc(var(--card-alpha, 1) * 100%), transparent),
+      color-mix(in srgb, var(--bg-1) calc(var(--card-alpha, 1) * 100%), transparent)),
+    var(--backdrop-url, none) center / cover no-repeat,
+    var(--bg-1);
 }

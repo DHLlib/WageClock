@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 /* Wage Clock · widget renderer
 
@@ -191,6 +191,28 @@ let sparkler = null;
 const media = window.matchMedia('(prefers-color-scheme: light)');
 let themeMode = 'auto';
 
+function applyOpacity(value) {
+  const v = typeof value === 'number' ? value : 1;
+  const alpha = Math.min(1, Math.max(0.35, v));
+  document.documentElement.style.setProperty('--card-alpha', String(alpha));
+  card.classList.toggle('glass', alpha < 0.999);
+  if (alpha < 0.999 && !document.documentElement.style.getPropertyValue('--backdrop-url')) {
+    // 先铺一张，宿主的定时器随后会换新的
+    document.documentElement.style.setProperty('--backdrop-url', "url('https://bg.local/backdrop.png?v=0')");
+  }
+}
+
+// 宿主每 1.5 秒把自己背后的画面拍成模糊快照，这里换图
+window.api.onBackdrop((payload) => {
+  if (!payload) return;
+  if (!payload.enabled) {
+    card.classList.remove('glass');
+    return;
+  }
+  if (!card.classList.contains('glass')) card.classList.add('glass');
+  document.documentElement.style.setProperty('--backdrop-url', "url('https://bg.local/backdrop.png?v=" + payload.v + "')");
+});
+
 function applyTheme() {
   const resolved = themeMode === 'auto' ? (media.matches ? 'light' : 'dark') : themeMode;
   document.body.className = resolved;
@@ -372,6 +394,7 @@ window.api.onSettings(({ settings: next, theme }) => {
   updateCloseHint();
   const nextTheme = forcedTheme || theme || next.theme || 'auto';
   if (nextTheme !== themeMode) { themeMode = nextTheme; applyTheme(); }
+  applyOpacity(next.opacity);
   setPinned(next.alwaysOnTop !== false);
   tick();
 });
@@ -383,6 +406,7 @@ window.api.init().then(({ settings: loaded, pinned, trayAvailable: trayOk }) => 
   trayAvailable = trayOk !== false;
   updateCloseHint();
   themeMode = forcedTheme || loaded.theme || 'auto';
+  applyOpacity(loaded.opacity);
   applyTheme();
   setPinned(pinned);
   tick();

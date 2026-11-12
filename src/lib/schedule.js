@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   theme: 'auto',
   closeAction: 'auto',
   alwaysOnTop: true,
+  opacity: 1,
   autoLaunch: false,
 };
 

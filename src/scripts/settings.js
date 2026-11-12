@@ -60,6 +60,7 @@ function collect() {
     theme: themeMode,
     closeAction,
     alwaysOnTop: $('alwaysOnTop').checked,
+  opacity: Number($('opacity').value) / 100,
     autoLaunch: $('autoLaunch').checked,
   };
 }
@@ -141,6 +142,9 @@ function hydrate(settings) {
   preferredDays = settings.workdays.slice();
   paintDays();
   $('alwaysOnTop').checked = !!settings.alwaysOnTop;
+  const opPct = Math.round((settings.opacity == null ? 1 : settings.opacity) * 100);
+  $('opacity').value = String(opPct);
+  $('opacityVal').textContent = opPct + '%';
   $('autoLaunch').checked = !!settings.autoLaunch;
   themeMode = settings.theme || 'auto';
   if (firstHydrate) { themeAtOpen = themeMode; firstHydrate = false; }
@@ -222,6 +226,12 @@ document.querySelectorAll('#theme button').forEach((b) => {
 
 ['alwaysOnTop', 'autoLaunch'].forEach((id) => {
   $(id).addEventListener('change', schedulePreview);
+});
+
+$('opacity').addEventListener('input', () => {
+  const v = Number($('opacity').value);
+  $('opacityVal').textContent = v + '%';
+  window.api.setOpacity(v / 100); // 即时预览，不必等保存
 });
 
 $('autoLaunch').addEventListener('change', paintCloseHint);
