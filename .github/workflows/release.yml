@@ -23,15 +23,44 @@ jobs:
           Get-ExecutionPolicy -List | Out-String | Write-Host
           Write-Host ("csc exists: " + (Test-Path "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"))
           Get-ChildItem tools | Select-Object Name | Out-String | Write-Host
+          Get-ChildItem tools/wv2 -Recurse -File | Select-Object FullName | Out-String | Write-Host
 
-      # 显式 Bypass，避免 runner 上的执行策略差异
+      # 用 Windows PowerShell 5.1 跑构建：本地就是这么编译的，避免 PowerShell 7
+      # 对原生程序参数不同的转义规则影响 csc 的 /r:"..." 与 /resource:"..."
       - name: 编译主程序
-        shell: pwsh
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/build.ps1
+        shell: powershell
+        run: |
+          $text = & powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/build.ps1 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          $text | Write-Host
+          if ($code -ne 0) {
+            $text | Set-Content ci-failure.txt -Encoding utf8
+            ("build.ps1 exit code: " + $code) | Add-Content ci-failure.txt
+            exit 1
+          }
 
       - name: 打包安装程序（含 WebView2 引导程序）
+        shell: powershell
+        run: |
+          $text = & powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/build-installer.ps1 2>&1 | Out-String
+          $code = $LASTEXITCODE
+          $text | Write-Host
+          if ($code -ne 0) {
+            $text | Set-Content ci-failure.txt -Encoding utf8
+            ("build-installer.ps1 exit code: " + $code) | Add-Content ci-failure.txt
+            exit 1
+          }
+
+      - name: 失败时把日志提交回仓库（便于排查，无需 token 读日志）
+        if: failure()
         shell: pwsh
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/build-installer.ps1
+        run: |
+          if (-not (Test-Path ci-failure.txt)) { "no captured output" | Set-Content ci-failure.txt }
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add ci-failure.txt
+          git commit -m "ci: build failure log [skip ci]" | Out-Null
+          git push
 
       - name: 命名产物、生成绿色版、计算校验值
         shell: pwsh
@@ -65,11 +94,8 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $src = "docs/release-notes/$tag.md"
-          if (Test-Path $src) {
-            Copy-Item $src release-notes.md
-          } else {
-            "## $tag" | Set-Content release-notes.md -Encoding utf8
-          }
+          if (Test-Path $src) { Copy-Item $src release-notes.md }
+          else { "## $tag" | Set-Content release-notes.md -Encoding utf8 }
 
       - name: 发布
         uses: softprops/action-gh-release@v2
