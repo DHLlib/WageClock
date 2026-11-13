@@ -5,5 +5,5 @@
 [assembly: AssemblyCompany("DHLlib")]
 [assembly: AssemblyDescription("工资时钟安装与卸载程序")]
 [assembly: AssemblyCopyright("MIT License")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
