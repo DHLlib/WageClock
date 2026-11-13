@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -224,58 +224,6 @@ namespace WageClock
         [DllImport("kernel32.dll")]
         private static extern IntPtr GetCurrentProcess();
 
-        // ---- 背景取样 ----
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern bool SetWindowDisplayAffinity(IntPtr hwnd, uint affinity);
-
-        private const uint WDA_NONE = 0x0;
-        private const uint WDA_EXCLUDEFROMCAPTURE = 0x11;
-
-        /// <summary>把自己从截图里排除，于是抓到的就是窗口背后的画面。</summary>
-        public static void ExcludeFromCapture(IntPtr hwnd, bool exclude)
-        {
-            try { SetWindowDisplayAffinity(hwnd, exclude ? WDA_EXCLUDEFROMCAPTURE : WDA_NONE); }
-            catch { }
-        }
-
-        /// <summary>抓屏幕区域，缩小再放大做廉价模糊，存 PNG。</summary>
-        public static bool CaptureBlurred(Rectangle area, string path, int factor)
-        {
-            try
-            {
-                Rectangle screen = Screen.PrimaryScreen.Bounds;
-                area.Intersect(screen);
-                if (area.Width < 8 || area.Height < 8) return false;
-                using (Bitmap full = new Bitmap(area.Width, area.Height))
-                {
-                    using (Graphics g = Graphics.FromImage(full))
-                    {
-                        g.CopyFromScreen(area.Location, Point.Empty, area.Size, CopyPixelOperation.SourceCopy);
-                    }
-                    int w = Math.Max(1, area.Width / factor);
-                    int h = Math.Max(1, area.Height / factor);
-                    using (Bitmap small = new Bitmap(w, h))
-                    {
-                        using (Graphics g = Graphics.FromImage(small))
-                        {
-                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
-                            g.DrawImage(full, 0, 0, w, h);
-                        }
-                        using (Bitmap blurred = new Bitmap(area.Width, area.Height))
-                        {
-                            using (Graphics g = Graphics.FromImage(blurred))
-                            {
-                                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
-                                g.DrawImage(small, 0, 0, area.Width, area.Height);
-                            }
-                            blurred.Save(path, System.Drawing.Imaging.ImageFormat.Png);
-                        }
-                    }
-                }
-                return true;
-            }
-            catch { return false; }
-        }
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool CloseHandle(IntPtr handle);
 
@@ -389,17 +337,6 @@ namespace WageClock
             object v;
             if (Data.TryGetValue(key, out v) && v != null) return Convert.ToString(v);
             return fallback;
-        }
-
-        public double Dbl(string key, double fallback)
-        {
-            object v;
-            if (Data == null || !Data.TryGetValue(key, out v) || v == null) return fallback;
-            if (v is double) return (double)v;
-            if (v is int) return (int)v;
-            double d;
-            return double.TryParse(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture),
-                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out d) ? d : fallback;
         }
 
         public bool Flag(string key, bool fallback)
@@ -604,11 +541,6 @@ namespace WageClock
         public void CloseSettings()
         {
             if (_settings != null && !_settings.IsDisposed) _settings.Hide();
-        }
-
-        public void RefreshWidgetBackdrop()
-        {
-            if (_widget != null && !_widget.IsDisposed) _widget.RefreshBackdrop();
         }
 
         public void BroadcastSettings()
@@ -893,13 +825,6 @@ namespace WageClock
 
             Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 "app.local", Paths.SrcDir, CoreWebView2HostResourceAccessKind.Allow);
-            try
-            {
-                // 背景快照放在数据目录
-                Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                    "bg.local", Paths.DataDir, CoreWebView2HostResourceAccessKind.Allow);
-            }
-            catch (Exception ex) { Paths.Log("bg mapping failed: " + ex.Message); }
 
             CoreWebView2Settings s = Web.CoreWebView2.Settings;
             s.AreDefaultContextMenusEnabled = false;
@@ -1059,23 +984,6 @@ namespace WageClock
                     }
                     return null;
 
-                case "set-opacity":
-                    object ov;
-                    double op = 1;
-                    if (payload != null && payload.TryGetValue("opacity", out ov))
-                    {
-                        double.TryParse(Convert.ToString(ov, System.Globalization.CultureInfo.InvariantCulture),
-                            System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out op);
-                    }
-                    if (op < 0.35) op = 0.35;
-                    if (op > 1) op = 1;
-                    App.Config.Data["opacity"] = op;
-                    App.Config.Save();
-                    App.BroadcastSettings();
-                    App.RefreshWidgetBackdrop();
-                    Paths.Log("opacity set to " + op.ToString("0.00"));
-                    return null;
-
                 case "cancelled":
                     App.BroadcastSettings(); // puts the form back to the stored values
                     return null;
@@ -1103,16 +1011,12 @@ namespace WageClock
                 catch (Exception) { }
             }
             Color bg = light ? Color.FromArgb(247, 248, 250) : Color.FromArgb(17, 20, 25);
-            double opacity = App.Config.Dbl("opacity", 1.0);
-            bool glass = opacity < 0.999;
             BackColor = bg;
             if (Web != null)
             {
                 // 背景交给页面画：半透明底色 + 宿主播过来的模糊快照
                 Web.DefaultBackgroundColor = bg;
             }
-            if (glass) Native.ExcludeFromCapture(Handle, true);
-            else Native.ExcludeFromCapture(Handle, false);
         }
     }
 
@@ -1283,47 +1187,10 @@ namespace WageClock
             }
             _ctx.Show(Cursor.Position);
         }
-
-        private System.Windows.Forms.Timer _backdropTimer;
-        private int _backdropTick;
-
-        /// <summary>透明度小于 1 时，定时把自己背后的画面拍成模糊快照喂给页面。</summary>
-        public void RefreshBackdrop()
-        {
-            bool glass = App.Config.Dbl("opacity", 1.0) < 0.999;
-            Native.ExcludeFromCapture(Handle, glass);
-            if (!glass)
-            {
-                if (_backdropTimer != null) { _backdropTimer.Stop(); _backdropTimer.Dispose(); _backdropTimer = null; }
-                Post("{\"type\":\"backdrop\",\"payload\":{\"enabled\":false}}");
-                return;
-            }
-            CaptureOnce();
-            if (_backdropTimer == null)
-            {
-                _backdropTimer = new System.Windows.Forms.Timer();
-                _backdropTimer.Interval = 1500;
-                _backdropTimer.Tick += delegate { CaptureOnce(); };
-                _backdropTimer.Start();
-            }
-        }
-
-        private void CaptureOnce()
-        {
-            if (!Visible) return;
-            string path = Path.Combine(Paths.DataDir, "backdrop.png");
-            if (Native.CaptureBlurred(Bounds, path, 9))
-            {
-                _backdropTick++;
-                Post("{\"type\":\"backdrop\",\"payload\":{\"enabled\":true,\"v\":" + _backdropTick + "}}");
-            }
-        }
-
         protected override void OnReady()
         {
             base.OnReady();
             ApplyChrome();
-            RefreshBackdrop();
             App.BroadcastSettings();
 
             if (_startHidden)
