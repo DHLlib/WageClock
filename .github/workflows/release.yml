@@ -1,4 +1,4 @@
-name: release
+﻿name: release
 
 # 推 v* 标签时自动构建并发布；也可以在 Actions 页面手动触发
 on:
@@ -39,7 +39,7 @@ jobs:
             exit 1
           }
 
-      - name: 打包安装程序（含 WebView2 引导程序）
+      - name: 打包安装程序
         shell: powershell
         run: |
           $text = & powershell -NoProfile -ExecutionPolicy Bypass -File ./tools/build-installer.ps1 2>&1 | Out-String
@@ -72,12 +72,12 @@ jobs:
 
           Copy-Item build/WageClockSetup.exe "dist/WageClockSetup-$version.exe"
 
-          # 绿色版：主程序 + 依赖 + 前端资源
+          # 绿色版：主程序 + 图标资源（不再有前端资源与 WebView2 依赖）
           $portable = Join-Path $env:RUNNER_TEMP "portable"
           New-Item -ItemType Directory -Force $portable | Out-Null
           Copy-Item build/WageClock.exe $portable
-          Get-ChildItem build -Filter '*.dll' -File | Copy-Item -Destination $portable
-          Copy-Item build/src, build/assets $portable -Recurse
+          Get-ChildItem build -Filter '*.dll' -File | Copy-Item -Destination $portable -ErrorAction SilentlyContinue
+          if (Test-Path build/assets) { Copy-Item build/assets $portable -Recurse }
           Compress-Archive -Path (Join-Path $portable '*') -DestinationPath "dist/WageClock-$version-portable.zip" -CompressionLevel Optimal
 
           $files = @("WageClockSetup-$version.exe", "WageClock-$version-portable.zip")
