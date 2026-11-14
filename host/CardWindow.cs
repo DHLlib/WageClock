@@ -14,7 +14,7 @@ namespace WageClock
     internal sealed class CardWindow : Form
     {
         // ---- 逻辑尺寸（与旧卡片一致）----
-        const float W = 400f, H = 272f;
+        const float W = 400f, H = 252f;
         const float CardPad = 8f;
         const float Radius = 18f;
 
@@ -309,7 +309,7 @@ namespace WageClock
             using (var b = new SolidBrush(_pal.Accent))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center })
             {
-                g.DrawString("窝囊费已赚", f, b, new RectangleF(0, 46, W, 20), sf);
+                g.DrawString("窝囊费已赚", f, b, new RectangleF(0, 42, W, 20), sf);
             }
         }
 
@@ -328,9 +328,9 @@ namespace WageClock
             using (var f = UiFont(11f, FontStyle.Regular))
             using (var b = new SolidBrush(_pal.Faint))
             {
-                DrawTextAt(g, "距周末", f, b, 24f, 196f);
-                DrawTextAt(g, "距下班", f, b, 150f, 196f);
-                RightText(g, "本月", f, b, 376f, 196f);
+                DrawTextAt(g, "距周末", f, b, 24f, 178f);
+                DrawTextAt(g, "距下班", f, b, 150f, 178f);
+                RightText(g, "本月", f, b, 376f, 178f);
             }
         }
 
@@ -366,7 +366,7 @@ namespace WageClock
             string cur = FormatDigits(_moneyCur, IntDigits, DecDigits);
 
             float avail = W - 44f;                       // 左右各留 22px
-            float intSize = FitMoneySize(g, avail);
+            float intSize = Math.Min(85f, FitMoneySize(g, avail));   // 上限 85px，放不下时按宽度收敛
             float decSize = intSize / 1.5f;              // 小数点后比前面小 1/3（前比后大 50%）
 
             using (var intFont = MoneyFont(intSize))
@@ -374,8 +374,8 @@ namespace WageClock
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near })
             using (var brush = new SolidBrush(_pal.Neon))
             {
-                float intW = WidestDigit(g, intFont, sf);
-                float decW = WidestDigit(g, decFont, sf);
+                float intW = Advance(g, intFont) * 0.92f;   // 字距压缩一半左右
+                float decW = Advance(g, decFont) * 0.92f;
                 float dotW = decW * 0.55f;
                 float yenSize = intSize * 0.46f;
                 using (var yenFont = MoneyFont(yenSize))
@@ -386,7 +386,7 @@ namespace WageClock
                     float x = (W - totalW) / 2f;
 
                     // 统一基线：整数部分决定行高，小数部分按自身高度下移对齐
-                    float baseline = 74f + Ascent(intFont);   // 顶部固定 74，避免压到上方标签
+                    float baseline = 66f + Ascent(intFont);   // 顶部固定 66，避免压到上方标签
                     float intTop = baseline - Ascent(intFont);
                     float decTop = baseline - Ascent(decFont);
                     float rowH = intFont.GetHeight(g) * 1.02f;
@@ -441,7 +441,7 @@ namespace WageClock
         float FitMoneySize(Graphics g, float avail)
         {
             if (_moneySize > 0) return _moneySize;
-            for (float size = 104f; size >= 26f; size -= 2f)
+            for (float size = 85f; size >= 26f; size -= 2f)
             {
                 using (var f = MoneyFont(size))
                 using (var sf = new StringFormat { Alignment = StringAlignment.Center })
@@ -524,12 +524,12 @@ namespace WageClock
             using (var b = new SolidBrush(_pal.Txt))
             {
                 string weekend = _view.WeekendReached ? "已到周末" : Schedule.FormatSpan(_view.WeekendSeconds);
-                DrawTextAt(g, weekend, f, b, 24f, 212f);
+                DrawTextAt(g, weekend, f, b, 24f, 194f);
 
                 string off = _view.State == "off" ? "—" : Schedule.FormatClockCs(_view.OffWorkSeconds);
-                DrawTextAt(g, off, f, b, 150f, 212f);
+                DrawTextAt(g, off, f, b, 150f, 194f);
 
-                RightText(g, _view.ElapsedWorkdays + "/" + _view.MonthWorkdays + " 天", f, b, 376f, 212f);
+                RightText(g, _view.ElapsedWorkdays + "/" + _view.MonthWorkdays + " 天", f, b, 376f, 194f);
             }
         }
 
@@ -537,7 +537,7 @@ namespace WageClock
 
         RectangleF TrackRect()
         {
-            return new RectangleF(24f, 170f, W - 48f, 5f);
+            return new RectangleF(24f, 158f, W - 48f, 5f);
         }
 
         static Font UiFont(float size, FontStyle style)
@@ -557,6 +557,11 @@ namespace WageClock
             }
         }
 
+        /// <summary>数字的实际前进宽度（用于收紧字距）。</summary>
+        static float Advance(Graphics g, Font f)
+        {
+            return g.MeasureString("0000", f).Width / 4f;
+        }
         static float WidestDigit(Graphics g, Font f, StringFormat sf)
         {
             float max = 0;
