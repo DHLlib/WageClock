@@ -14,7 +14,7 @@ namespace WageClock
     internal sealed class CardWindow : Form
     {
         // ---- 逻辑尺寸（与旧卡片一致）----
-        const float W = 400f, H = 252f;
+        const float W = 480f, H = 247f;
         const float CardPad = 8f;
         const float Radius = 18f;
 
@@ -263,9 +263,9 @@ namespace WageClock
 
         void DrawTools(Graphics g)
         {
-            _zPin = new RectangleF(307, 16, 20, 20);
-            _zGear = new RectangleF(333, 16, 20, 20);
-            _zClose = new RectangleF(359, 16, 20, 20);
+            _zPin = new RectangleF(W - 93f, 16, 20, 20);
+            _zGear = new RectangleF(W - 67f, 16, 20, 20);
+            _zClose = new RectangleF(W - 41f, 16, 20, 20);
 
             using (var pen = new Pen(_pal.Faint, 1.3f))
             {
@@ -329,8 +329,8 @@ namespace WageClock
             using (var b = new SolidBrush(_pal.Faint))
             {
                 DrawTextAt(g, "距周末", f, b, 24f, 178f);
-                DrawTextAt(g, "距下班", f, b, 150f, 178f);
-                RightText(g, "本月", f, b, 376f, 178f);
+                DrawTextAt(g, "距下班", f, b, W / 2f - 40f, 178f);
+                RightText(g, "本月", f, b, W - 24f, 178f);
             }
         }
 
@@ -341,7 +341,7 @@ namespace WageClock
             {
                 SizeF size = g.MeasureString(label, f);
                 float w = size.Width + 26f;
-                var pill = new RectangleF(301f - w, 16f, w, 20f);
+                var pill = new RectangleF(W - 99f - w, 16f, w, 20f);
                 using (GraphicsPath path = Round(pill, 10f))
                 using (var fill = new SolidBrush(_pal.Pill))
                 {
@@ -366,8 +366,8 @@ namespace WageClock
             string cur = FormatDigits(_moneyCur, IntDigits, DecDigits);
 
             float avail = W - 44f;                       // 左右各留 22px
-            float intSize = Math.Min(85f, FitMoneySize(g, avail));   // 上限 85px，放不下时按宽度收敛
-            float decSize = intSize / 1.5f;              // 小数点后比前面小 1/3（前比后大 50%）
+            float intSize = 80f;
+            float decSize = 60f;
 
             using (var intFont = MoneyFont(intSize))
             using (var decFont = MoneyFont(decSize))
@@ -527,9 +527,9 @@ namespace WageClock
                 DrawTextAt(g, weekend, f, b, 24f, 194f);
 
                 string off = _view.State == "off" ? "—" : Schedule.FormatClockCs(_view.OffWorkSeconds);
-                DrawTextAt(g, off, f, b, 150f, 194f);
+                DrawTextAt(g, off, f, b, W / 2f - 40f, 194f);
 
-                RightText(g, _view.ElapsedWorkdays + "/" + _view.MonthWorkdays + " 天", f, b, 376f, 194f);
+                RightText(g, _view.ElapsedWorkdays + "/" + _view.MonthWorkdays + " 天", f, b, W - 24f, 194f);
             }
         }
 
