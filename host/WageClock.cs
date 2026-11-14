@@ -604,14 +604,30 @@ namespace WageClock
         {
             string mode = Config.Str("closeAction", "auto");
             if (mode == "quit") { Quit(); return; }
-            if (mode == "tray") { HideWidget(); return; }
+            if (mode == "tray") { HideToTray(); return; }
             // auto：能收托盘就收，没有托盘就直接退出
-            if (TrayAvailable) HideWidget();
+            if (TrayAvailable) HideToTray();
             else Quit();
         }
         public void HideWidget()
         {
             if (_widget != null) _widget.Hide();
+        }
+
+        /// <summary>收进托盘：确保图标在场，并提示怎么叫回来。</summary>
+        public void HideToTray()
+        {
+            HideWidget();
+            if (_tray != null)
+            {
+                _tray.Visible = true;      // 有些环境会因刷新丢掉图标，这里再确认一次
+                Paths.Log("hidden to tray, tray.Visible=" + _tray.Visible);
+                ShowTrayHintOnce();
+            }
+            else
+            {
+                Paths.Log("hidden to tray, but tray icon is missing");
+            }
         }
 
         public void ToggleWidget()
