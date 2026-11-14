@@ -47,7 +47,6 @@ namespace WageClockSetup
         public const string UninstallKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\WageClock";
         public const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
         public const string RunValue = "WageClock";
-        public const string WebView2Client = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}";
 
         public static string DefaultDir
         {
@@ -192,48 +191,6 @@ namespace WageClockSetup
 
     static class Requirements
     {
-        // 返回值：检测到的版本号，或 null 表示没装
-        public static string WebView2Version()
-        {
-            string[] keys = new string[]
-            {
-                @"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\" + AppInfo.WebView2Client,
-                @"SOFTWARE\Microsoft\EdgeUpdate\Clients\" + AppInfo.WebView2Client
-            };
-            foreach (RegistryKey root in new RegistryKey[] { Registry.LocalMachine, Registry.CurrentUser })
-            {
-                foreach (string key in keys)
-                {
-                    try
-                    {
-                        using (RegistryKey k = root.OpenSubKey(key))
-                        {
-                            if (k == null) continue;
-                            string pv = k.GetValue("pv") as string;
-                            if (!string.IsNullOrEmpty(pv) && pv != "0.0.0.0") return pv;
-                        }
-                    }
-                    catch { }
-                }
-            }
-            // 兜底：找 msedgewebview2.exe
-            try
-            {
-                string baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), @"Microsoft\EdgeWebView\Application");
-                if (Directory.Exists(baseDir))
-                {
-                    string[] versions = Directory.GetDirectories(baseDir);
-                    Array.Sort(versions);
-                    for (int i = versions.Length - 1; i >= 0; i--)
-                    {
-                        if (File.Exists(Path.Combine(versions[i], "msedgewebview2.exe")))
-                            return Path.GetFileName(versions[i]);
-                    }
-                }
-            }
-            catch { }
-            return null;
-        }
 
         // .NET Framework 4.8 的 Release 值 >= 528040
         public static bool DotNet48()
@@ -354,37 +311,6 @@ namespace WageClockSetup
                     }
                 }
             }
-        }
-
-        public static string EmbeddedBootstrapperPath()
-        {
-            Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream("webview2setup.exe");
-            if (s == null) return null;
-            string path = Path.Combine(Path.GetTempPath(), "MicrosoftEdgeWebview2Setup.exe");
-            using (s)
-            using (FileStream fs = new FileStream(path, FileMode.Create, FileAccess.Write))
-            {
-                byte[] buffer = new byte[81920];
-                int read;
-                while ((read = s.Read(buffer, 0, buffer.Length)) > 0) fs.Write(buffer, 0, read);
-            }
-            return path;
-        }
-
-        public static bool InstallWebView2()
-        {
-            string bootstrapper = EmbeddedBootstrapperPath();
-            if (bootstrapper == null) return false;
-            ProcessStartInfo psi = new ProcessStartInfo(bootstrapper);
-            psi.Arguments = "/silent /install";
-            psi.UseShellExecute = false;
-            psi.CreateNoWindow = true;
-            using (Process p = Process.Start(psi))
-            {
-                p.WaitForExit(300000);
-                if (!p.HasExited) return false;
-            }
-            return Requirements.WebView2Version() != null;
         }
 
         public static void KillRunning(string dir)
@@ -597,14 +523,10 @@ namespace WageClockSetup
         CheckBox _autoStart;
         CheckBox _launch;
 
-        bool _webViewOk;
-        string _webViewVersion;
         bool _dotnetOk;
         bool _dirOk;
-        Label _webViewLine;
         Label _dotnetLine;
         Label _dirLine;
-        Button _fixWebView;
 
         bool _installing;
 
@@ -722,13 +644,12 @@ namespace WageClockSetup
             }
             if (_page == PageCheck)
             {
-                if (!_webViewOk)
+                if (!_dotnetOk)
                 {
-                    DialogResult r = MessageBox.Show(this,
-                        "还没有安装 WebView2 运行时，工资时钟无法显示界面。\n\n现在自动安装吗？（需要联网，约 2 MB）",
-                        AppInfo.Name, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
-                    if (r == DialogResult.Cancel) return;
-                    if (r == DialogResult.Yes && !InstallWebView()) return;
+                    MessageBox.Show(this,
+                        "缺少 .NET Framework 4.8，工资时钟无法运行。\n\nWindows 10 1903 及以上版本自带该运行时。",
+                        AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
                 }
             }
             if (_page == PageTasks)
@@ -773,7 +694,7 @@ namespace WageClockSetup
             Label tip = new Label();
             tip.SetBounds(8, 190, 536, 44);
             tip.ForeColor = Muted;
-            tip.Text = "为当前用户安装，不需要管理员权限。\n下一步会检查 WebView2 运行时等依赖。";
+            tip.Text = "为当前用户安装，不需要管理员权限。\n下一步会检查 .NET Framework 与目录权限。";
             _body.Controls.Add(tip);
         }
 
@@ -862,16 +783,8 @@ namespace WageClockSetup
             _heading.Text = "检查运行环境";
             _sub.Text = "安装前确认必要的组件";
 
-            _webViewLine = AddCheckRow(0, "WebView2 运行时", "界面渲染依赖它");
-            _dotnetLine = AddCheckRow(70, ".NET Framework 4.8", "程序本身的运行环境");
-            _dirLine = AddCheckRow(140, "安装目录", _dirBox.Text.Trim());
-
-            _fixWebView = MakeButton("自动安装 WebView2", 28, 206, 160);
-            _fixWebView.Click += delegate
-            {
-                if (InstallWebView()) RefreshChecks();
-            };
-            _body.Controls.Add(_fixWebView);
+            _dotnetLine = AddCheckRow(0, ".NET Framework 4.8", "程序本身的运行环境（系统自带）");
+            _dirLine = AddCheckRow(70, "安装目录", _dirBox.Text.Trim());
 
             Button rescan = MakeButton("重新检测", 196, 206, 100);
             rescan.Click += delegate { RefreshChecks(); };
@@ -906,10 +819,6 @@ namespace WageClockSetup
 
         void RefreshChecks()
         {
-            _webViewVersion = Requirements.WebView2Version();
-            _webViewOk = _webViewVersion != null;
-            _webViewLine.Text = _webViewOk ? "已安装 " + _webViewVersion : "未安装";
-            _webViewLine.ForeColor = _webViewOk ? Accent : Warn;
 
             _dotnetOk = Requirements.DotNet48();
             _dotnetLine.Text = _dotnetOk ? "已安装" : "缺少";
@@ -919,29 +828,8 @@ namespace WageClockSetup
             _dirLine.Text = _dirOk ? "可写" : "不可写";
             _dirLine.ForeColor = _dirOk ? Accent : Warn;
 
-            _fixWebView.Visible = !_webViewOk;
         }
 
-        bool InstallWebView()
-        {
-            try
-            {
-                _sub.Text = "正在安装 WebView2 运行时，请稍候…";
-                Application.DoEvents();
-                bool ok = Installer.InstallWebView2();
-                _sub.Text = "安装前确认必要的组件";
-                if (!ok)
-                    MessageBox.Show(this, "自动安装没有成功。请到微软官网下载「WebView2 运行时」安装后再继续：\n\nhttps://developer.microsoft.com/microsoft-edge/webview2/",
-                        AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                RefreshChecks();
-                return ok;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(this, "自动安装失败：" + ex.Message, AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return false;
-            }
-        }
 
         void ShowTasks()
         {
