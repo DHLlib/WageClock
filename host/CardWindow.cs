@@ -14,7 +14,7 @@ namespace WageClock
     internal sealed class CardWindow : Form
     {
         // ---- 逻辑尺寸（与旧卡片一致）----
-        const float W = 480f, H = 247f;
+        const float W = 480f, H = 240f;
         const float CardPad = 8f;
         const float Radius = 18f;
 
@@ -202,7 +202,6 @@ namespace WageClock
                 DrawCard(g);
                 DrawHeader(g);
                 DrawTools(g);
-                DrawLabel(g);
                 DrawTrack(g);
                 DrawMetaLabels(g);
             }
@@ -303,16 +302,6 @@ namespace WageClock
             }
         }
 
-        void DrawLabel(Graphics g)
-        {
-            using (var f = UiFont(13f, FontStyle.Bold))
-            using (var b = new SolidBrush(_pal.Accent))
-            using (var sf = new StringFormat { Alignment = StringAlignment.Center })
-            {
-                g.DrawString("窝囊费已赚", f, b, new RectangleF(0, 42, W, 20), sf);
-            }
-        }
-
         void DrawTrack(Graphics g)
         {
             var track = TrackRect();
@@ -336,107 +325,95 @@ namespace WageClock
 
         void DrawStatePill(Graphics g)
         {
-            string label = _view.StateLabel;
+            bool active = _view.State == "working";
             using (var f = UiFont(12f, FontStyle.Regular))
+            using (var b = new SolidBrush(active ? _pal.Accent : _pal.Dim))
             {
-                SizeF size = g.MeasureString(label, f);
-                float w = size.Width + 26f;
-                var pill = new RectangleF(W - 99f - w, 16f, w, 20f);
-                using (GraphicsPath path = Round(pill, 10f))
-                using (var fill = new SolidBrush(_pal.Pill))
-                {
-                    g.FillPath(fill, path);
-                }
-                bool active = _view.State == "working";
-                using (var dot = new SolidBrush(active ? _pal.Accent : _pal.Faint))
-                {
-                    g.FillEllipse(dot, pill.X + 9f, pill.Y + 8f, 4f, 4f);
-                }
-                using (var b = new SolidBrush(active ? _pal.Accent : _pal.Dim))
-                {
-                    DrawTextAt(g, label, f, b, pill.X + 17f, pill.Y + 3f);
-                }
+                SizeF size = g.MeasureString(_view.StateLabel, f);
+                g.DrawString(_view.StateLabel, f, b, W - 158f, 23f);
             }
         }
-
         void DrawMoney(Graphics g)
         {
             const int IntDigits = 4, DecDigits = 4;
             string prev = FormatDigits(_moneyPrev, IntDigits, DecDigits);
             string cur = FormatDigits(_moneyCur, IntDigits, DecDigits);
 
-            float avail = W - 44f;                       // 左右各留 22px
-            float intSize = 80f;
-            float decSize = 60f;
+            float barY = H - 54f;
+            float areaTop = 46f;
+            float areaBottom = barY - 22f;
+            float avail = W - 40f;
 
-            using (var intFont = MoneyFont(intSize))
-            using (var decFont = MoneyFont(decSize))
-            using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near })
-            using (var brush = new SolidBrush(_pal.Neon))
+            // 字号：宽度与高度双重约束，上限 120px
+            float size = 120f;
+            for (; size >= 32f; size -= 2f)
             {
-                float intW = Advance(g, intFont) * 0.92f;   // 字距压缩一半左右
-                float decW = Advance(g, decFont) * 0.92f;
-                float dotW = decW * 0.55f;
-                float yenSize = intSize * 0.46f;
-                using (var yenFont = MoneyFont(yenSize))
+                using (var fi = MoneyFont(size))
+                using (var fd = MoneyFont(size * 0.5f))
                 {
-                    float yenW = g.MeasureString("¥", yenFont).Width * 0.9f;
-                    float numW = intW * IntDigits + dotW + decW * DecDigits;
-                    float totalW = yenW + 6f + numW;
-                    float x = (W - totalW) / 2f;
+                    float iw = g.MeasureString("0000", fi).Width * 0.92f;
+                    float dw = g.MeasureString("0000", fd).Width * 0.92f;
+                    float dotw = g.MeasureString(".", fd).Width * 0.55f;
+                    float h = fi.GetHeight(g);
+                    if (iw + dw + dotw <= avail && h <= (areaBottom - areaTop)) break;
+                }
+            }
 
-                    // 统一基线：整数部分决定行高，小数部分按自身高度下移对齐
-                    float baseline = 66f + Ascent(intFont);   // 顶部固定 66，避免压到上方标签
-                    float intTop = baseline - Ascent(intFont);
-                    float decTop = baseline - Ascent(decFont);
-                    float rowH = intFont.GetHeight(g) * 1.02f;
+            using (var fi = MoneyFont(size))
+            using (var fd = MoneyFont(size * 0.5f))
+            using (var brush = new SolidBrush(_pal.Neon))
+            using (var decBrush = new SolidBrush(Color.FromArgb(217, _pal.Neon)))
+            using (var sf = new StringFormat { Alignment = StringAlignment.Center })
+            {
+                float intW = g.MeasureString("0000", fi).Width * 0.92f / 4f;
+                float decW = g.MeasureString("0000", fd).Width * 0.92f / 4f;
+                float dotW = decW * 0.55f;
+                float totalW = intW * IntDigits + dotW + decW * DecDigits;
+                float x = (W - totalW) / 2f;
 
-                    using (var yenBrush = new SolidBrush(Color.FromArgb(190, _pal.Neon)))
+                // 垂直居中：整数部分的可见高度占满中间区域
+                float baseline = (areaTop + areaBottom) / 2f + Ascent(fi) * 0.52f;
+                float intTop = baseline - Ascent(fi);
+                float decTop = baseline - Ascent(fd);
+                float rowH = intTop + fi.GetHeight(g) * 0.02f + fi.GetHeight(g) * 0.98f - intTop;
+
+                float t = Ease(_rollT);
+                bool rolling = _rollT < 1f;
+
+                for (int i = 0; i < cur.Length; i++)
+                {
+                    bool isDot = cur[i] == '.';
+                    bool isInt = i < IntDigits;
+                    Font f = isDot ? fd : (isInt ? fi : fd);
+                    float cw = isDot ? dotW : (isInt ? intW : decW);
+                    float top = isInt ? intTop : decTop;
+                    var cell = new RectangleF(x, top, cw, f.GetHeight(g));
+
+                    if (!rolling || prev[i] == cur[i])
                     {
-                        float yenTop = baseline - Ascent(yenFont);
-                        g.DrawString("¥", yenFont, yenBrush, x, yenTop);
+                        g.DrawString(cur[i].ToString(), f, isInt ? brush : decBrush, cell, sf);
                     }
-                    x += yenW + 6f;
-
-                    float t = Ease(_rollT);
-                    bool rolling = _rollT < 1f;
-
-                    for (int i = 0; i < cur.Length; i++)
+                    else
                     {
-                        bool isDot = cur[i] == '.';
-                        bool isInt = i < IntDigits;
-                        Font f = isDot ? decFont : (isInt ? intFont : decFont);
-                        float cw = isDot ? dotW : (isInt ? intW : decW);
-                        float top = isInt ? intTop : decTop;
-                        var cell = new RectangleF(x, top, cw, f.GetHeight(g) * 1.02f);
-
-                        if (!rolling || prev[i] == cur[i])
-                        {
-                            g.DrawString(cur[i].ToString(), f, brush, cell, sf);
-                        }
-                        else
-                        {
-                            Region old = g.Clip;
-                            g.SetClip(cell);
-                            g.DrawString(prev[i].ToString(), f, brush,
-                                new RectangleF(cell.X, cell.Y - rowH * t, cell.Width, cell.Height), sf);
-                            g.DrawString(cur[i].ToString(), f, brush,
-                                new RectangleF(cell.X, cell.Y + rowH * (1f - t), cell.Width, cell.Height), sf);
-                            g.Clip = old;
-                        }
-                        x += cw;
+                        Region old = g.Clip;
+                        g.SetClip(cell);
+                        g.DrawString(prev[i].ToString(), f, isInt ? brush : decBrush,
+                            new RectangleF(cell.X, cell.Y - rowH * t, cell.Width, cell.Height), sf);
+                        g.DrawString(cur[i].ToString(), f, isInt ? brush : decBrush,
+                            new RectangleF(cell.X, cell.Y + rowH * (1f - t), cell.Width, cell.Height), sf);
+                        g.Clip = old;
                     }
+                    x += cw;
                 }
             }
         }
 
-        /// <summary>字体的基线高度（用于不同字号对齐同一条基线）。</summary>
+        /// <summary>字体基线高度，用于不同字号对齐同一条基线。</summary>
         static float Ascent(Font f)
         {
             FontFamily fam = f.FontFamily;
             return fam.GetCellAscent(f.Style) * f.Size / fam.GetEmHeight(f.Style);
         }
-
         /// <summary>挑一个能塞进可用宽度的字号。</summary>
         float FitMoneySize(Graphics g, float avail)
         {
