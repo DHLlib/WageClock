@@ -1,9 +1,8 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location (Split-Path -Parent $root)
 
 $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$wv2 = Join-Path (Get-Location) 'tools\wv2'
 $out = Join-Path (Get-Location) 'build'
 $lib = $out
 
@@ -13,7 +12,7 @@ if (-not (Test-Path (Join-Path (Get-Location) 'assets\icon.ico'))) {
 
 New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-# 不再需要 WebView2Loader.dll
+# 产物只有主程序与图标资源
 
 $refs = @(
     'System.dll',
