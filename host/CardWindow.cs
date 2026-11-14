@@ -84,12 +84,13 @@ namespace WageClock
             AutoScaleMode = AutoScaleMode.None;   // 否则 WinForms 会按字体把 400×272 缩成 394×243
             try { Icon = new Icon(Paths.IconPath); } catch (Exception) { }
 
-            Point? saved = app.Config.WindowPos;
-            Location = saved.HasValue ? saved.Value : DefaultLocation();
-
             // 不能在这里 CreateGraphics()：那会提前建出窗口句柄，OnHandleCreated 时状态还没准备好
             using (Graphics g = Graphics.FromHwnd(IntPtr.Zero)) _scale = g.DpiX / 96f;
             Size = new Size((int)Math.Round(W * _scale), (int)Math.Round(H * _scale));
+
+            // 尺寸确定之后再夹位置，否则用默认宽高算出来的边界是错的
+            Point? saved = app.Config.WindowPos;
+            Location = saved.HasValue ? ClampToScreen(saved.Value) : DefaultLocation();
 
             _view = Schedule.Evaluate(_app.Now, _app.Settings);
             _moneyCur = _view.Earned;
@@ -160,10 +161,25 @@ namespace WageClock
             Render();
         }
 
-        static Point DefaultLocation()
+        /// <summary>把保存的位置夹回可见区域：卡片宽度变过之后旧坐标可能落在屏幕外。</summary>
+        Point ClampToScreen(Point p)
         {
             Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            return new Point(area.Right - 424, area.Bottom - 312);
+            int maxX = area.Right - Width;
+            int maxY = area.Bottom - Height;
+            int x = Math.Min(Math.Max(p.X, area.Left), Math.Max(area.Left, maxX));
+            int y = Math.Min(Math.Max(p.Y, area.Top), Math.Max(area.Top, maxY));
+            if (x != p.X || y != p.Y)
+                Paths.Log("window pos clamped " + p.X + "," + p.Y + " -> " + x + "," + y);
+            return new Point(x, y);
+        }
+        /// <summary>默认落在右下角：按窗口实际宽高算，不能写死尺寸。</summary>
+        Point DefaultLocation()
+        {
+            Rectangle area = Screen.PrimaryScreen.WorkingArea;
+            return new Point(
+                Math.Max(area.Left, area.Right - Width - 24),
+                Math.Max(area.Top, area.Bottom - Height - 72));
         }
 
         int _ticks;
