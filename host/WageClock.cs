@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -23,6 +23,35 @@ namespace WageClock
         [STAThread]
         private static void Main(string[] args)
         {
+            for (int i = 0; i < args.Length - 1; i++)
+            {
+                if (args[i] == "--demo")
+                {
+                    DateTime demo;
+                    if (DateTime.TryParse(args[i + 1], out demo))
+                    {
+                        App.DemoBase = demo;
+                        Paths.Log("demo time base " + demo);
+                    }
+                }
+            }
+
+            if (Array.IndexOf(args, "--selftest") >= 0)
+            {
+                int failed = SelfTest.Run();
+                string report = SelfTest.Report();
+                try
+                {
+                    System.IO.File.WriteAllText(
+                        System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "selftest.txt"),
+                        report, new System.Text.UTF8Encoding(false));
+                }
+                catch (Exception) { }
+                Paths.Log(report);
+                Environment.Exit(failed == 0 ? 0 : 1);
+                return;
+            }
+
             bool createdNew;
             using (var mutex = new Mutex(true, "Global\\WageClock.SingleInstance", out createdNew))
             {
@@ -383,10 +412,20 @@ namespace WageClock
     internal sealed class App : ApplicationContext
     {
         public readonly Store Config = new Store();
+
+        /// <summary>--demo 用的起始时间：从这一刻开始按真实节奏往前走。</summary>
+        public static DateTime? DemoBase;
+        static readonly System.Diagnostics.Stopwatch DemoWatch = System.Diagnostics.Stopwatch.StartNew();
+
+        public DateTime Now
+        {
+            get { return DemoBase.HasValue ? DemoBase.Value.Add(DemoWatch.Elapsed) : DateTime.Now; }
+        }
+
         public CoreWebView2Environment Env;
 
-        private WidgetForm _widget;
-        private SettingsForm _settings;
+        private Form _widget;
+        private Form _settings;
         private NotifyIcon _tray;
         private ContextMenuStrip _menu;
 
@@ -481,7 +520,7 @@ namespace WageClock
             return Env;
         }
 
-        public WidgetForm Widget
+        public Form Widget
         {
             get { return _widget; }
         }
@@ -492,11 +531,82 @@ namespace WageClock
         }
 
         /// <summary>startHidden creates and warms the window off-screen without showing it.</summary>
+        // ---- 卡片实现（这条分支上是原生自绘，另一条分支是 WebView2）----
+        WageSettings _wageSettings;
+        bool _wageSettingsDirty = true;
+
+        public WageSettings Settings
+        {
+            get
+            {
+                if (_wageSettings == null || _wageSettingsDirty)
+                {
+                    _wageSettings = WageSettings.FromConfig(Config);
+                    _wageSettingsDirty = false;
+                }
+                return _wageSettings;
+            }
+        }
+
+        public void InvalidateSettings()
+        {
+            _wageSettingsDirty = true;
+        }
+
+        public bool IsLightTheme()
+        {
+            string theme = Config.Str("theme", "auto");
+            if (theme == "light") return true;
+            if (theme == "dark") return false;
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+                {
+                    object v = key != null ? key.GetValue("AppsUseLightTheme") : null;
+                    return v != null && Convert.ToInt32(v) == 1;
+                }
+            }
+            catch (Exception) { return false; }
+        }
+
+        Form NewWidget(bool startHidden)
+        {
+            var card = new CardWindow(this, IsLightTheme());
+            card.TopMost = AlwaysOnTop;
+            return card;
+        }
+
+        bool WidgetReady()
+        {
+            var web = _widget as WidgetForm;
+            return web != null && web.Ready;
+        }
+
+        void WidgetPost(string json)
+        {
+            var web = _widget as WidgetForm;
+            if (web != null) web.Post(json);
+        }
+
+        void WidgetRefresh()
+        {
+            var web = _widget as WidgetForm;
+            if (web != null) { web.RefreshChrome(); return; }
+            var card = _widget as CardWindow;
+            if (card != null) card.SetTheme(IsLightTheme());
+        }
+
+        public void ShowContextMenu(Control owner, Point screenPoint)
+        {
+            if (_menu == null) return;
+            _menu.Show(owner, screenPoint);
+        }
         public void ShowWidget(bool startHidden)
         {
             if (_widget == null || _widget.IsDisposed)
             {
-                _widget = new WidgetForm(this, startHidden);
+                _widget = NewWidget(startHidden);
                 _widget.Show();
             }
             else
@@ -519,28 +629,31 @@ namespace WageClock
 
         public void OpenSettings()
         {
-            if (_settings == null || _settings.IsDisposed)
-            {
-                _settings = new SettingsForm(this);
-                _settings.ShowForUser();
-            }
-            else
-            {
-                _settings.ShowForUser();
-            }
+            var form = new NativeSettingsForm(this);
+            form.FormClosed += delegate { _settings = null; };
+            _settings = form;
+            form.Show();
+            form.Activate();
         }
 
         /// <summary>Loads the settings page in an off-screen window so the first open is instant.</summary>
         public void PreloadSettings()
         {
-            if (_settings != null && !_settings.IsDisposed) return;
-            _settings = new SettingsForm(this);
-            _settings.WarmUp();
+            // 原生设置窗口没有可预热的 WebView，打开即用
         }
 
         public void CloseSettings()
         {
-            if (_settings != null && !_settings.IsDisposed) _settings.Hide();
+            if (_settings != null && !_settings.IsDisposed) _settings.Close();
+        }
+
+        /// <summary>设置保存后，把主题、置顶、自启等立刻生效。</summary>
+        public void ApplySettingsChange()
+        {
+            if (_widget != null && !_widget.IsDisposed) _widget.TopMost = AlwaysOnTop;
+            WidgetRefresh();
+            string close = Config.Str("closeAction", "auto");
+            Paths.Log("settings applied: theme=" + Config.Str("theme", "auto") + " topmost=" + AlwaysOnTop + " close=" + close);
         }
 
         public void BroadcastSettings()
@@ -554,13 +667,14 @@ namespace WageClock
             msg["type"] = "settings";
             msg["payload"] = payload;
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAGE_CLOCK_DEBUG")))
-                Paths.Log("broadcast theme=" + Config.Str("theme", "auto") + " widgetReady=" + (_widget != null && _widget.Ready));
+                Paths.Log("broadcast theme=" + Config.Str("theme", "auto") + " widgetReady=" + (_widget != null && WidgetReady()));
 
             string json = Store.Json.Serialize(msg);
-            if (_widget != null && _widget.Ready) _widget.Post(json);
-            if (_settings != null && _settings.Ready) _settings.Post(json);
-            if (_widget != null && !_widget.IsDisposed) _widget.RefreshChrome();
-            if (_settings != null && !_settings.IsDisposed) _settings.RefreshChrome();
+            if (_widget != null && WidgetReady()) WidgetPost(json);
+            var settingsWeb = _settings as SettingsForm;
+            if (settingsWeb != null && settingsWeb.Ready) settingsWeb.Post(json);
+            if (_widget != null && !_widget.IsDisposed) WidgetRefresh();
+            if (settingsWeb != null && !settingsWeb.IsDisposed) settingsWeb.RefreshChrome();
         }
 
         public void BroadcastPinned()
@@ -569,10 +683,10 @@ namespace WageClock
             msg["type"] = "pinned";
             msg["payload"] = AlwaysOnTop;
             if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAGE_CLOCK_DEBUG")))
-                Paths.Log("broadcast theme=" + Config.Str("theme", "auto") + " widgetReady=" + (_widget != null && _widget.Ready));
+                Paths.Log("broadcast theme=" + Config.Str("theme", "auto") + " widgetReady=" + (_widget != null && WidgetReady()));
 
             string json = Store.Json.Serialize(msg);
-            if (_widget != null && _widget.Ready) _widget.Post(json);
+            if (_widget != null && WidgetReady()) WidgetPost(json);
         }
 
         public void SetPinned(bool pinned)
