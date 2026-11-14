@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -638,6 +638,17 @@ namespace WageClock
 
         public void OpenSettings()
         {
+            // 已经开着就把它叫到前面，别再开第二个
+            if (_settings != null && !_settings.IsDisposed)
+            {
+                if (!_settings.Visible) _settings.Show();
+                if (_settings.WindowState == FormWindowState.Minimized)
+                    _settings.WindowState = FormWindowState.Normal;
+                _settings.Activate();
+                _settings.BringToFront();
+                return;
+            }
+
             var form = new NativeSettingsForm(this);
             form.FormClosed += delegate { _settings = null; };
             _settings = form;
