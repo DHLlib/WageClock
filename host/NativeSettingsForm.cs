@@ -94,7 +94,11 @@ namespace WageClock
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Width = 140,
                 Location = new Point(96, _y),
+                DrawMode = DrawMode.OwnerDrawFixed,
+                ItemHeight = 22,
+                FlatStyle = FlatStyle.Flat,
             };
+            _theme.DrawItem += ComboDrawItem;
             _theme.Items.AddRange(new object[] { "跟随系统", "深色", "浅色" });
             Row("主题", _theme);
             _y += 36;
@@ -104,7 +108,11 @@ namespace WageClock
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Width = 140,
                 Location = new Point(96, _y),
+                DrawMode = DrawMode.OwnerDrawFixed,
+                ItemHeight = 22,
+                FlatStyle = FlatStyle.Flat,
             };
+            _closeAction.DrawItem += ComboDrawItem;
             _closeAction.Items.AddRange(new object[] { "跟随设置", "收进托盘", "退出程序" });
             Row("关闭", _closeAction);
             _y += 44;
@@ -310,6 +318,26 @@ namespace WageClock
             Close();
         }
 
+        bool _dark;
+        Color _fieldColor = Color.White;
+        Color _textColor = Color.FromArgb(18, 21, 26);
+
+        /// <summary>下拉列表自绘：WinForms 默认弹出层是白底，深色主题下看不清。</summary>
+        void ComboDrawItem(object sender, DrawItemEventArgs e)
+        {
+            var combo = sender as ComboBox;
+            if (combo == null || e.Index < 0) return;
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            Color back = selected
+                ? (_dark ? Color.FromArgb(45, 90, 70) : Color.FromArgb(210, 235, 224))
+                : _fieldColor;
+            using (var brush = new SolidBrush(back)) e.Graphics.FillRectangle(brush, e.Bounds);
+            using (var text = new SolidBrush(_textColor))
+            {
+                e.Graphics.DrawString(combo.Items[e.Index].ToString(), combo.Font, text,
+                    new RectangleF(e.Bounds.X + 4, e.Bounds.Y + 3, e.Bounds.Width - 8, e.Bounds.Height));
+            }
+        }
         /// <summary>设置窗口自己也要跟随主题，否则保存后只有卡片变了。</summary>
         void ApplyPalette()
         {
@@ -355,6 +383,11 @@ namespace WageClock
                     }
                 }
             }
+            _dark = !light;
+            _fieldColor = field;
+            _textColor = fore;
+            if (_theme != null) { _theme.BackColor = field; _theme.ForeColor = fore; _theme.Invalidate(); }
+            if (_closeAction != null) { _closeAction.BackColor = field; _closeAction.ForeColor = fore; _closeAction.Invalidate(); }
             _preview.ForeColor = fore;
             _preview.Parent.BackColor = field;
         }
