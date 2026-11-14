@@ -37,6 +37,11 @@ $cscArgs = @(
 ) + $refs + @(
     (Join-Path (Get-Location) 'host\AssemblyInfo.cs'),
     (Join-Path (Get-Location) 'host\WageClock.cs'),
+    (Join-Path (Get-Location) 'host\Schedule.cs'),
+    (Join-Path (Get-Location) 'host\SelfTest.cs'),
+    (Join-Path (Get-Location) 'host\Theme.cs'),
+    (Join-Path (Get-Location) 'host\CardWindow.cs'),
+    (Join-Path (Get-Location) 'host\NativeSettingsForm.cs'),
     (Join-Path (Get-Location) 'host\Shot.cs')
 )
 
