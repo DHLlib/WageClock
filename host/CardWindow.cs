@@ -341,7 +341,7 @@ namespace WageClock
 
             float barY = H - 54f;
             float areaTop = 46f;
-            float areaBottom = barY - 22f;
+            float areaBottom = barY - 40f;   // 金额与进度条之间留出呼吸空间
             float avail = W - 40f;
 
             // 字号：宽度与高度双重约束，上限 120px
