@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -8,8 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
-using Microsoft.Web.WebView2.Core;
-using Microsoft.Web.WebView2.WinForms;
 
 namespace WageClock
 {
@@ -85,11 +83,7 @@ namespace WageClock
                     Paths.Log("Fatal: " + e.ExceptionObject);
                 };
 
-                if (args.Length >= 2 && args[0] == "--shot")
-                {
-                    Application.Run(new ShotContext(args[1]));
-                    return;
-                }
+                
 
                 bool startInTray = Array.IndexOf(args, "--tray") >= 0;
                 Application.Run(new App(false, startInTray));
@@ -422,7 +416,6 @@ namespace WageClock
             get { return DemoBase.HasValue ? DemoBase.Value.Add(DemoWatch.Elapsed) : DateTime.Now; }
         }
 
-        public CoreWebView2Environment Env;
 
         private Form _widget;
         private Form _settings;
@@ -511,14 +504,7 @@ namespace WageClock
             get { return Config.Flag("alwaysOnTop", true); }
         }
 
-        public async Task<CoreWebView2Environment> EnsureEnv()
-        {
-            if (Env == null)
-            {
-                Env = await CoreWebView2Environment.CreateAsync(null, Paths.WebViewData, null);
-            }
-            return Env;
-        }
+
 
         public Form Widget
         {
@@ -579,20 +565,17 @@ namespace WageClock
 
         bool WidgetReady()
         {
-            var web = _widget as WidgetForm;
-            return web != null && web.Ready;
+            // 原生卡片没有"页面就绪"这一层
+            return true;
         }
 
         void WidgetPost(string json)
         {
-            var web = _widget as WidgetForm;
-            if (web != null) web.Post(json);
+            // 原生卡片直接读配置，没有 IPC
         }
 
         void WidgetRefresh()
         {
-            var web = _widget as WidgetForm;
-            if (web != null) { web.RefreshChrome(); return; }
             var card = _widget as CardWindow;
             if (card != null) card.SetTheme(IsLightTheme());
         }
@@ -671,10 +654,8 @@ namespace WageClock
 
             string json = Store.Json.Serialize(msg);
             if (_widget != null && WidgetReady()) WidgetPost(json);
-            var settingsWeb = _settings as SettingsForm;
-            if (settingsWeb != null && settingsWeb.Ready) settingsWeb.Post(json);
             if (_widget != null && !_widget.IsDisposed) WidgetRefresh();
-            if (settingsWeb != null && !settingsWeb.IsDisposed) settingsWeb.RefreshChrome();
+
         }
 
         public void BroadcastPinned()
@@ -905,501 +886,4 @@ namespace WageClock
         }
     }
 
-    /// <summary>Shared plumbing for a WebView2 page that talks to the host.</summary>
-    internal class WebHostForm : Form
-    {
-        protected readonly App App;
-        protected WebView2 Web;
-        protected double ZoomFactor = 1;
-        public bool Ready { get; protected set; }
-
-        public WebHostForm(App app, int widthDip, int heightDip, Color bg, bool topMost)
-        {
-            App = app;
-            FormBorderStyle = FormBorderStyle.None;
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.Manual;
-            AutoScaleMode = AutoScaleMode.None;
-            BackColor = bg;
-            Width = Native.Scale(widthDip);
-            Height = Native.Scale(heightDip);
-            TopMost = topMost;
-
-            Web = new WebView2();
-            Web.Dock = DockStyle.Fill;
-            Web.DefaultBackgroundColor = bg;
-            Controls.Add(Web);
-        }
-
-        protected async Task Navigate(string relativeUrl, Dictionary<string, string> query)
-        {
-            CoreWebView2Environment env = await App.EnsureEnv();
-            await Web.EnsureCoreWebView2Async(env);
-            if (ZoomFactor != 1) Web.ZoomFactor = ZoomFactor;
-
-            Web.CoreWebView2.SetVirtualHostNameToFolderMapping(
-                "app.local", Paths.SrcDir, CoreWebView2HostResourceAccessKind.Allow);
-
-            CoreWebView2Settings s = Web.CoreWebView2.Settings;
-            s.AreDefaultContextMenusEnabled = false;
-            s.IsStatusBarEnabled = false;
-            s.AreDevToolsEnabled = true;
-            s.IsZoomControlEnabled = false;
-
-            Web.CoreWebView2.WebMessageReceived += OnWebMessage;
-            Web.CoreWebView2.Navigate(BuildUrl(relativeUrl, query));
-        }
-
-        private static string BuildUrl(string relative, Dictionary<string, string> query)
-        {
-            string url = "https://app.local/" + relative;
-            if (query != null && query.Count > 0)
-            {
-                var parts = new List<string>();
-                foreach (KeyValuePair<string, string> kv in query)
-                {
-                    parts.Add(Uri.EscapeDataString(kv.Key) + "=" + Uri.EscapeDataString(kv.Value));
-                }
-                url += "?" + string.Join("&", parts.ToArray());
-            }
-            return url;
-        }
-
-        public void Post(string json)
-        {
-            if (Web.CoreWebView2 != null) Web.CoreWebView2.PostWebMessageAsJson(json);
-        }
-
-        public async Task CapturePngAsync(string path)
-        {
-            using (var stream = File.Create(path))
-            {
-                await Web.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
-            }
-        }
-
-        private void OnWebMessage(object sender, CoreWebView2WebMessageReceivedEventArgs e)
-        {
-            Dictionary<string, object> msg;
-            try
-            {
-                msg = Store.Json.Deserialize<Dictionary<string, object>>(e.WebMessageAsJson);
-            }
-            catch (Exception) { return; }
-            if (msg == null) return;
-
-            object rawId = msg.ContainsKey("id") ? msg["id"] : null;
-            string action = msg.ContainsKey("action") ? Convert.ToString(msg["action"]) : "";
-            Dictionary<string, object> payload = msg.ContainsKey("payload")
-                ? msg["payload"] as Dictionary<string, object>
-                : null;
-
-            if (action == "ready")
-            {
-                OnReady();
-                return;
-            }
-            if (action == "event" && payload != null && Convert.ToString(payload["type"]) == "ready")
-            {
-                OnReady();
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("WAGE_CLOCK_DEBUG")))
-                Paths.Log("ipc: " + action + " from " + GetType().Name);
-
-            object data;
-            try
-            {
-                data = OnAction(action, payload);
-            }
-            catch (Exception ex)
-            {
-                Paths.Log("action " + action + " threw: " + ex.GetType().Name + " " + ex.Message);
-                data = null;
-            }
-            if (rawId != null)
-            {
-                var reply = new Dictionary<string, object>();
-                reply["replyId"] = rawId;
-                reply["data"] = data;
-                Post(Store.Json.Serialize(reply));
-            }
-        }
-
-        protected virtual void OnReady()
-        {
-            Ready = true;
-        }
-
-        protected virtual object OnAction(string action, Dictionary<string, object> payload)
-        {
-            switch (action)
-            {
-                case "init":
-                    var init = new Dictionary<string, object>();
-                    init["settings"] = App.Config.Data;
-                    init["pinned"] = App.AlwaysOnTop;
-                    init["autoLaunchError"] = App.AutoLaunchError;
-                    init["trayAvailable"] = App.TrayAvailable;
-                    init["integrityLevel"] = Native.IntegrityLevel;
-                    return init;
-
-                case "save":
-                    if (payload != null)
-                    {
-                        object windowPos;
-                        Dictionary<string, object> merged = payload;
-                        // keep the host-owned window position
-                        if (App.Config.Data.TryGetValue("windowPos", out windowPos)) merged["windowPos"] = windowPos;
-                        App.Config.Data = merged;
-                        App.Config.Save();
-                        App.RebuildTray();
-                        App.BroadcastSettings();
-                        ApplyChrome();
-                    }
-                    return new Dictionary<string, object> { { "settings", App.Config.Data } };
-
-                case "drag":
-                    // let the current IPC message finish first, otherwise the modal move loop
-                    // sometimes starts while the button-up is still queued and the drag stalls
-                    BeginInvoke(new Action(delegate { Native.DragWindow(Handle); }));
-                    return null;
-
-                case "open-settings":
-                    App.OpenSettings();
-                    return null;
-
-                case "close-settings":
-                    App.CloseSettings();
-                    return null;
-
-                case "toggle-pin":
-                    App.SetPinned(!App.AlwaysOnTop);
-                    return null;
-
-                case "quit":
-                    App.Quit();
-                    return null;
-
-                case "js-error":
-                    Paths.Log("js error: " + (payload != null && payload.ContainsKey("message") ? Convert.ToString(payload["message"]) : "?"));
-                    return null;
-
-                case "set-theme":
-                    object th;
-                    string theme = payload != null && payload.TryGetValue("theme", out th) ? Convert.ToString(th) : null;
-                    if (theme == "auto" || theme == "dark" || theme == "light")
-                    {
-                        App.Config.Data["theme"] = theme;
-                        App.Config.Save();
-                        App.BroadcastSettings();
-                        Paths.Log("theme switched live: " + theme);
-                    }
-                    return null;
-
-                case "cancelled":
-                    App.BroadcastSettings(); // puts the form back to the stored values
-                    return null;
-            }
-            return null;
-        }
-
-        public void RefreshChrome() { ApplyChrome(); }
-
-        protected virtual void ApplyChrome()
-        {
-            string theme = App.Config.Str("theme", "auto");
-            bool light = theme == "light";
-            if (theme == "auto")
-            {
-                try
-                {
-                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                        @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
-                    {
-                        object v = key != null ? key.GetValue("AppsUseLightTheme") : null;
-                        light = v != null && Convert.ToInt32(v) == 1;
-                    }
-                }
-                catch (Exception) { }
-            }
-            Color bg = light ? Color.FromArgb(247, 248, 250) : Color.FromArgb(17, 20, 25);
-            BackColor = bg;
-            if (Web != null)
-            {
-                // 背景交给页面画：半透明底色 + 宿主播过来的模糊快照
-                Web.DefaultBackgroundColor = bg;
-            }
-        }
-    }
-
-    internal sealed class WidgetForm : WebHostForm
-    {
-        private const int HotkeyId = 0xA1;
-        private readonly System.Windows.Forms.Timer _posTimer = new System.Windows.Forms.Timer();
-
-        private readonly bool _startHidden;
-        private readonly Point _home;
-        private bool _warming;
-
-        public WidgetForm(App app, bool startHidden = false)
-            : base(app, 400, 272, Color.FromArgb(17, 20, 25), app.AlwaysOnTop)
-        {
-            Text = "Wage Clock";
-            ShowInTaskbar = true; // always findable from the taskbar, even after Win+D
-            try { Icon = new Icon(Paths.IconPath); } catch (Exception) { }
-
-            Point? saved = app.Config.WindowPos;
-            _home = ClampToScreens(saved.HasValue ? saved.Value : DefaultLocation());
-            _startHidden = startHidden;
-            Location = startHidden ? new Point(-20000, -20000) : _home;
-
-            _posTimer.Interval = 700;
-            _posTimer.Tick += delegate
-            {
-                _posTimer.Stop();
-                if (WindowState != FormWindowState.Normal) return;
-                if (_warming || _startHidden) return;
-                app.Config.WindowPos = Location;
-                app.Config.Save();
-            };
-            LocationChanged += delegate
-            {
-                if (_warming || _startHidden) return;
-                _posTimer.Stop();
-                _posTimer.Start();
-            };
-
-            Shown += async delegate
-            {
-                ApplyChrome();
-                Native.TryRoundCorners(this, 10);
-                await Navigate("index.html", null);
-            };
-
-            Resize += delegate { Native.TryRoundCorners(this, 10); };
-        }
-
-        private Point DefaultLocation()
-        {
-            Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            return new Point(area.Right - Width - Native.Scale(24), area.Bottom - Height - Native.Scale(24));
-        }
-
-        /// <summary>Keep the window reachable when monitors were removed or the resolution shrank.</summary>
-        private Point ClampToScreens(Point wanted)
-        {
-            const int minVisible = 60;
-            foreach (Screen s in Screen.AllScreens)
-            {
-                Rectangle a = s.WorkingArea;
-                bool visible =
-                    wanted.X + Width > a.Left + minVisible &&
-                    wanted.X < a.Right - minVisible &&
-                    wanted.Y + Height > a.Top + minVisible &&
-                    wanted.Y < a.Bottom - minVisible;
-                if (visible) return wanted;
-            }
-            return DefaultLocation();
-        }
-
-        protected override void OnHandleCreated(EventArgs e)
-        {
-            base.OnHandleCreated(e);
-            Native.RegisterHotKey(Handle, HotkeyId,
-                Native.MOD_CONTROL | Native.MOD_ALT | Native.MOD_NOREPEAT, (uint)Keys.W);
-        }
-
-        protected override void OnHandleDestroyed(EventArgs e)
-        {
-            Native.UnregisterHotKey(Handle, HotkeyId);
-            base.OnHandleDestroyed(e);
-        }
-
-        protected override void WndProc(ref Message m)
-        {
-            if (m.Msg == Native.WM_HOTKEY && m.WParam.ToInt32() == HotkeyId)
-            {
-                App.ToggleWidget();
-                return;
-            }
-            base.WndProc(ref m);
-        }
-
-        /// <summary>
-        /// With autostart on, the window is a tray resident: × hides it and only the tray menu exits.
-        /// Without autostart there is nothing to come back to, so × really closes the app.
-        /// </summary>
-        private void CloseOrHide()
-        {
-            if (!App.TrayAvailable)
-            {
-                // hiding would strand the user with no way back
-                App.Quit();
-                return;
-            }
-
-            string action = App.Config.Str("closeAction", "auto");
-            bool tray;
-            if (action == "tray") tray = true;
-            else if (action == "quit") tray = false;
-            else tray = App.Config.Flag("autoLaunch", false); // follow autostart
-
-            if (tray) Hide();
-            else App.Quit();
-        }
-
-        protected override void OnFormClosing(FormClosingEventArgs e)
-        {
-            if (App.Quitting)
-            {
-                base.OnFormClosing(e);
-                return;
-            }
-            e.Cancel = true;
-            CloseOrHide();
-        }
-
-        protected override object OnAction(string action, Dictionary<string, object> payload)
-        {
-            if (action == "close-widget")
-            {
-                CloseOrHide();
-                return null;
-            }
-            if (action == "context-menu")
-            {
-                ShowContextMenu();
-                return null;
-            }
-            return base.OnAction(action, payload);
-        }
-
-        private ContextMenuStrip _ctx;
-        private ToolStripMenuItem _ctxPin;
-
-        private void ShowContextMenu()
-        {
-            if (_ctx == null)
-            {
-                _ctx = new ContextMenuStrip();
-                _ctx.Items.Add("设置…", null, delegate { App.OpenSettings(); });
-                _ctx.Items.Add("隐藏窗口", null, delegate { Hide(); });
-                _ctx.Items.Add(new ToolStripSeparator());
-
-                _ctxPin = new ToolStripMenuItem("窗口置顶");
-                _ctxPin.Click += delegate { App.SetPinned(!App.AlwaysOnTop); };
-                _ctx.Items.Add(_ctxPin);
-
-                _ctx.Items.Add(new ToolStripSeparator());
-                _ctx.Items.Add("退出", null, delegate { App.Quit(); });
-
-                // rebuilding or disposing the strip while it is closing crashes the modal menu
-                // filter; keep one instance and just refresh its state
-                _ctx.Opening += delegate { _ctxPin.Checked = App.AlwaysOnTop; };
-            }
-            _ctx.Show(Cursor.Position);
-        }
-        protected override void OnReady()
-        {
-            base.OnReady();
-            ApplyChrome();
-            App.BroadcastSettings();
-
-            if (_startHidden)
-            {
-                // warmed off-screen: park it at the real spot, still hidden
-                _warming = true;
-                Hide();
-                Location = _home;
-                _warming = false;
-            }
-
-            // warm the settings window in the background so opening it is instant
-            var warm = new System.Windows.Forms.Timer();
-            warm.Interval = 900;
-            warm.Tick += delegate
-            {
-                warm.Stop();
-                warm.Dispose();
-                App.PreloadSettings();
-            };
-            warm.Start();
-        }
-    }
-
-    internal sealed class SettingsForm : WebHostForm
-    {
-        private bool _warmingUp;
-
-        public SettingsForm(App app)
-            : base(app, 440, 820, Color.FromArgb(17, 20, 25), true)
-        {
-            Text = "设置 · Wage Clock";
-            ShowInTaskbar = false;
-            StartPosition = FormStartPosition.Manual;
-            try { Icon = new Icon(Paths.IconPath); } catch (Exception) { }
-
-            Shown += async delegate
-            {
-                ApplyChrome();
-                Native.TryRoundCorners(this, 10);
-                try { await Navigate("settings.html", null); }
-                catch (Exception ex) { Paths.Log("settings navigate failed: " + ex.Message); }
-            };
-        }
-
-        /// <summary>Render the page off-screen once, so the first real open has nothing to wait for.</summary>
-        public void WarmUp()
-        {
-            if (IsDisposed) return;
-            _warmingUp = true;
-            Location = new Point(-20000, -20000);
-            Show();
-        }
-
-        public void ShowForUser()
-        {
-            if (IsDisposed) return;
-            if (Location.X < -10000 || Location.Y < -10000)
-            {
-                Location = CenteredLocation();
-            }
-            _warmingUp = false;
-            Show();
-            Activate();
-            BringToFront();
-        }
-
-        private Point CenteredLocation()
-        {
-            Rectangle area = Screen.PrimaryScreen.WorkingArea;
-            return new Point(
-                area.X + (area.Width - Width) / 2,
-                area.Y + (area.Height - Height) / 2);
-        }
-
-        protected override void OnReady()
-        {
-            base.OnReady();
-            ApplyChrome();
-            if (_warmingUp)
-            {
-                _warmingUp = false;
-                Hide();
-            }
-        }
-
-        protected override void OnFormClosing(FormClosingEventArgs e)
-        {
-            if (!App.Quitting)
-            {
-                e.Cancel = true;
-                Hide();
-                return;
-            }
-            base.OnFormClosing(e);
-        }
-    }
 }
