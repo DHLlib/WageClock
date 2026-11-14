@@ -123,7 +123,8 @@ namespace WageClockSetup
             long total = 0;
             try
             {
-                foreach (string f in Directory.GetFiles(dir, "*", SearchOption.AllDirectories))
+                // 只统计第一层：递归遍历大目录会让界面卡死
+                foreach (string f in Directory.GetFiles(dir))
                 {
                     try { total += new FileInfo(f).Length; } catch { }
                 }
@@ -313,6 +314,7 @@ namespace WageClockSetup
             }
         }
 
+        /// <summary>结束所有正在运行的工资时钟：单实例锁是全局的，留着旧实例会让新版本启动即退出。</summary>
         public static void KillRunning(string dir)
         {
             try
@@ -321,13 +323,13 @@ namespace WageClockSetup
                 {
                     try
                     {
-                        string path = p.MainModule.FileName;
-                        if (!string.IsNullOrEmpty(dir) && !path.StartsWith(dir, StringComparison.OrdinalIgnoreCase)) continue;
                         p.Kill();
                         p.WaitForExit(5000);
                     }
                     catch { }
                 }
+                // 给单实例互斥量一点时间释放
+                System.Threading.Thread.Sleep(400);
             }
             catch { }
         }
@@ -408,7 +410,23 @@ namespace WageClockSetup
         [STAThread]
         static void Main(string[] args)
         {
-            Log.Write("start: " + string.Join(" ", args));
+            Log.Write("start: " + string.Join(" ", args));            AppDomain.CurrentDomain.UnhandledException += delegate(object s, UnhandledExceptionEventArgs e)
+            {
+                Exception ex = e.ExceptionObject as Exception;
+                Log.Write("FATAL: " + (ex == null ? "unknown" : ex.ToString()));
+                MessageBox.Show("安装程序出错：\n\n" + (ex == null ? "未知错误" : ex.Message)
+                    + "\n\n如果是权限问题，请把安装程序复制到桌面或 %TEMP% 后重新运行（在工作区目录里运行会受低权限限制）。",
+                    AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            };
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += delegate(object s, System.Threading.ThreadExceptionEventArgs e)
+            {
+                Log.Write("UI EXCEPTION: " + e.Exception);
+                MessageBox.Show("安装程序出错：\n\n" + e.Exception.Message
+                    + "\n\n如果是权限问题，请把安装程序复制到桌面或 %TEMP% 后重新运行。",
+                    AppInfo.Name, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            };
+
             bool silent = HasArg(args, "/silent") || HasArg(args, "/s");
             bool uninstall = HasArg(args, "/uninstall");
             string dirArg = ArgValue(args, "/dir");
@@ -748,10 +766,20 @@ namespace WageClockSetup
                 _dirLine.Text = "";
                 return;
             }
-            long size = Directory.Exists(dir) ? Fs.DirSize(dir) : 0;
-            string state = Directory.Exists(dir)
-                ? (size > 0 ? "目录已存在，将覆盖同名文件（原有设置不受影响）" : "目录已存在且为空")
-                : "目录不存在，安装时创建";
+            // 只看第一层是否为空：递归统计整个目录会卡死界面
+            bool exists = Directory.Exists(dir);
+            bool empty = true;
+            if (exists)
+            {
+                try
+                {
+                    using (var e = Directory.EnumerateFileSystemEntries(dir).GetEnumerator()) empty = !e.MoveNext();
+                }
+                catch { empty = false; }
+            }
+            string state = !exists
+                ? "目录不存在，安装时创建"
+                : (empty ? "目录已存在且为空" : "目录已存在，将覆盖同名文件（原有设置不受影响）");
             _dirLine.Text = state;
             _dirLine.ForeColor = Muted;
         }
