@@ -365,39 +365,50 @@ namespace WageClock
             string prev = FormatDigits(_moneyPrev, IntDigits, DecDigits);
             string cur = FormatDigits(_moneyCur, IntDigits, DecDigits);
 
-            float avail = W - 48f;
-            float size = FitMoneySize(g, avail);
-            using (var f = MoneyFont(size))
+            float avail = W - 44f;                       // 左右各留 22px
+            float intSize = FitMoneySize(g, avail);
+            float decSize = intSize / 1.5f;              // 小数点后比前面小 1/3（前比后大 50%）
+
+            using (var intFont = MoneyFont(intSize))
+            using (var decFont = MoneyFont(decSize))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Near })
             using (var brush = new SolidBrush(_pal.Neon))
             {
-                float digitW = WidestDigit(g, f, sf);
-                float dotW = digitW * 0.34f;
-                float numW = digitW * (IntDigits + DecDigits) + dotW;
-                float yenSize = size * 0.52f;
+                float intW = WidestDigit(g, intFont, sf);
+                float decW = WidestDigit(g, decFont, sf);
+                float dotW = decW * 0.55f;
+                float yenSize = intSize * 0.46f;
                 using (var yenFont = MoneyFont(yenSize))
                 {
-                    float yenW = g.MeasureString("¥", yenFont).Width * 0.94f;
-                    float totalW = yenW + 4f + numW;
+                    float yenW = g.MeasureString("¥", yenFont).Width * 0.9f;
+                    float numW = intW * IntDigits + dotW + decW * DecDigits;
+                    float totalW = yenW + 6f + numW;
                     float x = (W - totalW) / 2f;
-                    const float top = 66f;
-                    float rowH = f.GetHeight(g) * 0.94f;
+
+                    // 统一基线：整数部分决定行高，小数部分按自身高度下移对齐
+                    float baseline = 74f + Ascent(intFont);   // 顶部固定 74，避免压到上方标签
+                    float intTop = baseline - Ascent(intFont);
+                    float decTop = baseline - Ascent(decFont);
+                    float rowH = intFont.GetHeight(g) * 1.02f;
 
                     using (var yenBrush = new SolidBrush(Color.FromArgb(190, _pal.Neon)))
                     {
-                        g.DrawString("¥", yenFont, yenBrush,
-                            new RectangleF(x, top + rowH * 0.30f, yenW, rowH),
-                            new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Near });
+                        float yenTop = baseline - Ascent(yenFont);
+                        g.DrawString("¥", yenFont, yenBrush, x, yenTop);
                     }
-                    x += yenW + 4f;
+                    x += yenW + 6f;
 
                     float t = Ease(_rollT);
                     bool rolling = _rollT < 1f;
 
                     for (int i = 0; i < cur.Length; i++)
                     {
-                        float cw = cur[i] == '.' ? dotW : digitW;
-                        var cell = new RectangleF(x, top, cw, rowH);
+                        bool isDot = cur[i] == '.';
+                        bool isInt = i < IntDigits;
+                        Font f = isDot ? decFont : (isInt ? intFont : decFont);
+                        float cw = isDot ? dotW : (isInt ? intW : decW);
+                        float top = isInt ? intTop : decTop;
+                        var cell = new RectangleF(x, top, cw, f.GetHeight(g) * 1.02f);
 
                         if (!rolling || prev[i] == cur[i])
                         {
@@ -407,10 +418,10 @@ namespace WageClock
                         {
                             Region old = g.Clip;
                             g.SetClip(cell);
-                            var up = new RectangleF(cell.X, cell.Y - rowH * t, cell.Width, rowH);
-                            var down = new RectangleF(cell.X, cell.Y + rowH * (1f - t), cell.Width, rowH);
-                            g.DrawString(prev[i].ToString(), f, brush, up, sf);
-                            g.DrawString(cur[i].ToString(), f, brush, down, sf);
+                            g.DrawString(prev[i].ToString(), f, brush,
+                                new RectangleF(cell.X, cell.Y - rowH * t, cell.Width, cell.Height), sf);
+                            g.DrawString(cur[i].ToString(), f, brush,
+                                new RectangleF(cell.X, cell.Y + rowH * (1f - t), cell.Width, cell.Height), sf);
                             g.Clip = old;
                         }
                         x += cw;
@@ -419,17 +430,25 @@ namespace WageClock
             }
         }
 
+        /// <summary>字体的基线高度（用于不同字号对齐同一条基线）。</summary>
+        static float Ascent(Font f)
+        {
+            FontFamily fam = f.FontFamily;
+            return fam.GetCellAscent(f.Style) * f.Size / fam.GetEmHeight(f.Style);
+        }
+
         /// <summary>挑一个能塞进可用宽度的字号。</summary>
         float FitMoneySize(Graphics g, float avail)
         {
             if (_moneySize > 0) return _moneySize;
-            for (float size = 76f; size >= 26f; size -= 2f)
+            for (float size = 104f; size >= 26f; size -= 2f)
             {
                 using (var f = MoneyFont(size))
                 using (var sf = new StringFormat { Alignment = StringAlignment.Center })
                 {
                     float digitW = WidestDigit(g, f, sf);
-                    float numW = digitW * 8 + digitW * 0.34f;
+                    float decDigitW = digitW * 0.667f;
+                    float numW = digitW * 4 + digitW * 0.367f + decDigitW * 4;
                     float yenW = size * 0.52f * 0.6f;
                     if (yenW + 4f + numW <= avail) { _moneySize = size; return size; }
                 }
