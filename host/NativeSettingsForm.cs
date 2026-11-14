@@ -1,4 +1,4 @@
-// 设置窗口：纯 WinForms 控件，替换原来的 WebView2 页面。
+﻿// 设置窗口：纯 WinForms 控件，替换原来的 WebView2 页面。
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -33,6 +33,7 @@ namespace WageClock
 
             BuildUi();
             LoadFromConfig();
+            ApplyPalette();
         }
 
         // ---------- 布局 ----------
@@ -305,9 +306,58 @@ namespace WageClock
             _app.Config.Save();
             _app.InvalidateSettings();
             _app.ApplySettingsChange();
+            ApplyPalette();      // 设置页自己也跟着换肤
             Close();
         }
 
+        /// <summary>设置窗口自己也要跟随主题，否则保存后只有卡片变了。</summary>
+        void ApplyPalette()
+        {
+            bool light = _app.IsLightTheme();
+            Color back = light ? Color.FromArgb(247, 248, 250) : Color.FromArgb(24, 27, 33);
+            Color fore = light ? Color.FromArgb(18, 21, 26) : Color.FromArgb(238, 241, 246);
+            Color dim = light ? Color.FromArgb(70, 76, 84) : Color.FromArgb(176, 184, 194);
+            Color faint = light ? Color.FromArgb(120, 126, 134) : Color.FromArgb(140, 148, 158);
+            Color field = light ? Color.White : Color.FromArgb(34, 38, 46);
+
+            BackColor = back;
+            foreach (Control c in Controls)
+            {
+                if (c is Label)
+                {
+                    c.ForeColor = ((Label)c).Font.Bold ? fore : dim;
+                }
+                else if (c is NumericUpDown)
+                {
+                    c.BackColor = field;
+                    c.ForeColor = fore;
+                    foreach (Control inner in c.Controls)   // 数字框内部的编辑区
+                    {
+                        inner.BackColor = field;
+                        inner.ForeColor = fore;
+                    }
+                }
+                else if (c is CheckBox || c is ComboBox)
+                {
+                    c.ForeColor = fore;
+                }
+                else if (c is TextBox)
+                {
+                    c.BackColor = field;
+                    c.ForeColor = fore;
+                }
+                else if (c is Panel)
+                {
+                    c.BackColor = field;
+                    foreach (Control inner in c.Controls)
+                    {
+                        inner.ForeColor = fore;
+                    }
+                }
+            }
+            _preview.ForeColor = fore;
+            _preview.Parent.BackColor = field;
+        }
         static Segment ReadSegment(Store cfg, string key, string defStart, string defEnd)
         {
             object raw;
