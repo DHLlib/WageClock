@@ -4,5 +4,5 @@
 [assembly: AssemblyDescription("常驻桌面的实时工资计数器")]
 [assembly: AssemblyProduct("Wage Clock")]
 [assembly: AssemblyCompany("")]
-[assembly: AssemblyVersion("2.0.0.0")]
-[assembly: AssemblyFileVersion("2.0.0.0")]
+[assembly: AssemblyVersion("2.0.1.0")]
+[assembly: AssemblyFileVersion("2.0.1.0")]
