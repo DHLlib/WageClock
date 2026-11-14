@@ -267,22 +267,39 @@ namespace WageClock
             _zGear = new RectangleF(333, 16, 20, 20);
             _zClose = new RectangleF(359, 16, 20, 20);
 
-            using (var pen = new Pen(_pal.Faint, 1.4f))
+            using (var pen = new Pen(_pal.Faint, 1.3f))
             {
-                // 置顶：图钉（圆头 + 斜杆 + 底托）
+                // 置顶：图钉 —— 三角头 + 针杆
                 var c = Center(_zPin);
-                g.DrawEllipse(pen, c.X - 3.4f, c.Y - 6f, 6.8f, 6.8f);
-                g.DrawLine(pen, c.X, c.Y + 0.8f, c.X, c.Y + 6f);
+                using (var path = new GraphicsPath())
+                {
+                    path.AddPolygon(new PointF[]
+                    {
+                        new PointF(c.X - 4.6f, c.Y - 5.2f),
+                        new PointF(c.X + 4.6f, c.Y - 5.2f),
+                        new PointF(c.X + 1.5f, c.Y + 1.0f),
+                        new PointF(c.X - 1.5f, c.Y + 1.0f),
+                    });
+                    g.DrawPath(pen, path);
+                }
+                g.DrawLine(pen, c.X, c.Y + 1.0f, c.X, c.Y + 6.0f);
 
-                // 设置：齿轮（简化为圆 + 三条辐条）
+                // 设置：齿轮 —— 八个齿 + 内外圆
                 c = Center(_zGear);
-                g.DrawEllipse(pen, c.X - 4.5f, c.Y - 4.5f, 9, 9);
-                g.DrawEllipse(pen, c.X - 1.6f, c.Y - 1.6f, 3.2f, 3.2f);
+                for (int i = 0; i < 8; i++)
+                {
+                    double a = i * Math.PI / 4.0;
+                    g.DrawLine(pen,
+                        c.X + (float)(3.7 * Math.Cos(a)), c.Y + (float)(3.7 * Math.Sin(a)),
+                        c.X + (float)(5.4 * Math.Cos(a)), c.Y + (float)(5.4 * Math.Sin(a)));
+                }
+                g.DrawEllipse(pen, c.X - 3.8f, c.Y - 3.8f, 7.6f, 7.6f);
+                g.DrawEllipse(pen, c.X - 1.3f, c.Y - 1.3f, 2.6f, 2.6f);
 
                 // 隐藏：叉
                 c = Center(_zClose);
-                g.DrawLine(pen, c.X - 4, c.Y - 4, c.X + 4, c.Y + 4);
-                g.DrawLine(pen, c.X + 4, c.Y - 4, c.X - 4, c.Y + 4);
+                g.DrawLine(pen, c.X - 3.8f, c.Y - 3.8f, c.X + 3.8f, c.Y + 3.8f);
+                g.DrawLine(pen, c.X + 3.8f, c.Y - 3.8f, c.X - 3.8f, c.Y + 3.8f);
             }
         }
 
@@ -468,7 +485,13 @@ namespace WageClock
         {
             foreach (Spark s in _sparks)
             {
-                int a = (int)(255 * Math.Max(0, s.Life / s.Max));
+                float k = Math.Max(0f, s.Life / s.Max);
+                int a = (int)(255 * k);
+                using (var glow = new SolidBrush(Color.FromArgb(a / 4, s.C)))
+                {
+                    float d = s.Size * 3f;
+                    g.FillEllipse(glow, s.X - d / 2, s.Y - d / 2, d, d);
+                }
                 using (var b = new SolidBrush(Color.FromArgb(a, s.C)))
                 {
                     g.FillEllipse(b, s.X - s.Size / 2, s.Y - s.Size / 2, s.Size, s.Size);
