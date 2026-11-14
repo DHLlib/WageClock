@@ -647,7 +647,7 @@ namespace WageClock
             }
             if (e.Button != MouseButtons.Left) return;
 
-            if (_zClose.Contains(p)) { _app.HideWidget(); return; }
+            if (_zClose.Contains(p)) { _app.RequestClose(); return; }
             if (_zGear.Contains(p)) { _app.OpenSettings(); return; }
             if (_zPin.Contains(p)) { _app.SetPinned(!_app.AlwaysOnTop); return; }
 

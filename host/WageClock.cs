@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
@@ -599,6 +599,16 @@ namespace WageClock
             }
         }
 
+        /// <summary>按「关闭行为」设置决定点 × 之后做什么。</summary>
+        public void RequestClose()
+        {
+            string mode = Config.Str("closeAction", "auto");
+            if (mode == "quit") { Quit(); return; }
+            if (mode == "tray") { HideWidget(); return; }
+            // auto：能收托盘就收，没有托盘就直接退出
+            if (TrayAvailable) HideWidget();
+            else Quit();
+        }
         public void HideWidget()
         {
             if (_widget != null) _widget.Hide();
